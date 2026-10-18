@@ -211,8 +211,9 @@ export class DrivingGame {
           map: adTexture(o.name),
           roughness: 0.72,
           emissive: 0xffffff,
-          emissiveIntensity: 0.16,
+          emissiveIntensity: 0.5,
         });
+        o.material.emissiveMap = o.material.map;
         o.castShadow = false;
       }
     });
@@ -240,7 +241,7 @@ export class DrivingGame {
     this.car.visible = true;
     this.markers.forEach((m) => (m.visible = true));
     const paint = new T.MeshPhysicalMaterial({
-      color: 0x086974,
+      color: 0x087b87,
       metalness: 0.68,
       roughness: 0.24,
       clearcoat: 1,

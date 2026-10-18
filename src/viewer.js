@@ -63,7 +63,7 @@ export class RoomExperience {
     this.controller = root.getObjectByName("controller");
     this.controllerRest = this.controller.position.clone();
     this.controllerRotation = this.controller.quaternion.clone();
-    this.controllerFront = new T.Vector3(3.45, 6.03, 2.0);
+    this.controllerFront = new T.Vector3(3.45, 6.15, 2.0);
     this.controllerFrontRotation = new T.Quaternion().setFromEuler(
       new T.Euler(-0.08, -0.1, -0.04),
     );
@@ -155,6 +155,31 @@ export class RoomExperience {
     addEventListener("resize", this.resize);
     this.setPhase("off");
     this.renderer.setAnimationLoop(this.frame);
+    canvas.addEventListener("click", (event) => {
+      if (this.phase !== "driving") return;
+      const a = this.screenPoint(0, 0),
+        b = this.screenPoint(1920, 1080);
+      if (
+        event.clientX < a.x ||
+        event.clientX > b.x ||
+        event.clientY < a.y ||
+        event.clientY > b.y
+      )
+        return;
+      const pointer = new T.Vector2(
+        ((event.clientX - a.x) / (b.x - a.x)) * 2 - 1,
+        1 - ((event.clientY - a.y) / (b.y - a.y)) * 2,
+      );
+      const ray = new T.Raycaster();
+      ray.setFromCamera(pointer, this.game.camera);
+      const hit = ray.intersectObjects(this.game.markers, true)[0];
+      if (!hit) return;
+      let object = hit.object;
+      while (object && !this.game.markers.includes(object))
+        object = object.parent;
+      const index = this.game.markers.indexOf(object);
+      if (index >= 0) this.game.state.select(index);
+    });
     canvas.addEventListener("webglcontextlost", (event) => {
       event.preventDefault();
       this.setActive(false);
@@ -332,7 +357,7 @@ export class RoomExperience {
     this.widePosition = new T.Vector3(0, 6.65, distance);
     this.wideTarget = new T.Vector3(0, 6.1, 0);
     // Fit the physical 16:9 display inside both wide and tall desktop windows.
-    const tvHeight = Math.max(7.7, 12.65 / this.camera.aspect);
+    const tvHeight = Math.max(7.3, 12.65 / this.camera.aspect);
     this.tvPosition = new T.Vector3(
       0,
       8.22,

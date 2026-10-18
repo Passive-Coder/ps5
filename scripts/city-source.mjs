@@ -939,6 +939,8 @@ export function createCity() {
         dark,
       );
   }
+  palm(street, -13.4, -29, 9.2);
+  palm(street, -13.4, -91, 8.5);
   // Chain-link fencing on the left, behind the roadside safety rail.
   for (let z = 5; z > -120; z -= 3) {
     rod(street, [-15, 0.3, z], [-15, 3.4, z], 0.035, chrome);
