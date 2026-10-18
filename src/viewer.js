@@ -89,7 +89,7 @@ export class RoomExperience {
   }
   powerOn() {
     if(this.phase!=='off')return;
-    this.setPhase('boot');this.tv.visible=true;this.controller.visible=true;this.gameCase.visible=true;this.disc.visible=true;
+    this.powerStart=this.time;this.setPhase('boot');this.tv.visible=true;this.controller.visible=true;this.gameCase.visible=true;this.disc.visible=true;
     for(const child of this.cabinet.children)child.visible=true;
   }
   hoverDisc(out) {if(this.phase==='ready')this.discTarget=out?1:0;}
@@ -108,8 +108,8 @@ export class RoomExperience {
   resize() {
     this.width=innerWidth;this.height=innerHeight;this.camera.aspect=this.width/this.height;this.camera.updateProjectionMatrix();
     this.renderer.setSize(this.width,this.height,false);this.composer.setSize(this.width,this.height);
-    const verticalSize=Math.max(12.15,19.6/this.camera.aspect),distance=verticalSize/(2*Math.tan(T.MathUtils.degToRad(17)));
-    this.widePosition=new T.Vector3(0,6.55,distance);this.wideTarget=new T.Vector3(0,5.9,0);
+    const verticalSize=Math.max(13.0,20.1/this.camera.aspect),distance=verticalSize/(2*Math.tan(T.MathUtils.degToRad(17)));
+    this.widePosition=new T.Vector3(0,6.65,distance);this.wideTarget=new T.Vector3(0,6.1,0);
     if(this.phase&&this.phase!=='off'&&this.phase!=='boot'){this.camera.position.copy(this.widePosition);this.lookTarget.copy(this.wideTarget);this.camera.lookAt(this.lookTarget);}
   }
   projected(point) {const p=point.clone().project(this.camera);return {x:(p.x*.5+.5)*this.width,y:(-.5*p.y+.5)*this.height};}
@@ -135,7 +135,7 @@ export class RoomExperience {
       if(elapsed>duration)this.setPhase('ready');
     }
     if(this.phase!=='off'){
-      const on=clamp(this.time*.9,0,1),white=clamp((this.time-3)/2,0,1),ledColor=new T.Color(0x286fff).lerp(new T.Color(0xc6e3ff),white*.65);
+      const poweredTime=this.time-this.powerStart,on=clamp(poweredTime*.9,0,1),white=clamp((poweredTime-3)/2,0,1),ledColor=new T.Color(0x286fff).lerp(new T.Color(0xc6e3ff),white*.65);
       this.leds.forEach(led=>{led.material.emissive.copy(ledColor);led.material.emissiveIntensity=(8+Math.sin(this.time*5)*.35)*on;});
       this.powerMesh.material.emissive.set(0x8ac5ff);this.powerMesh.material.emissiveIntensity=5*on;this.consoleGlow.intensity=2.2*on;
       const night=this.phase==='home'||this.phase==='loading';

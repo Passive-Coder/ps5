@@ -80,7 +80,7 @@ export function createRoom() {
   box(cabinet, 'handheld-screen', [1.63, .80, .018], [.1, 1.02, .72], screen, .018);
 
   const console = bake(buildConsole('original'));
-  console.name = 'ps5'; console.position.set(-7.25, 6.03, .25); console.rotation.y = -.28;
+  console.name = 'ps5'; console.position.set(-7.25, 6.12, .25); console.rotation.y = -.28;
   console.getObjectByName('Power button').name = 'power-button';
   root.add(console);
 
@@ -105,11 +105,11 @@ export function createRoom() {
   const controller = bake(buildController()); controller.name = 'controller';
   controller.position.set(7.3, 4.76, .65); controller.rotation.set(-.13, -.12, -.025); root.add(controller);
 
-  const game = group(root, 'game-case'); game.position.set(-.75, 2.91, 1.22); game.rotation.x = -.08;
+  const game = group(root, 'game-case'); game.position.set(-.75, 2.88, 1.22); game.rotation.x = -.08; game.scale.setScalar(.88);
   const blue = mat(0x154582, .3);
   box(game, 'case-plastic', [1.60, 1.91, .15], [0, 0, 0], blue, .045);
   plane(game, 'case-art', 1.47, 1.78, [0, 0, .083], white);
-  const disc = group(root, 'disc'); disc.position.set(-.75, 2.91, 1.23);
+  const disc = group(root, 'disc'); disc.position.set(-.75, 2.88, 1.23);
   const edge = new T.Mesh(new T.CylinderGeometry(.60, .60, .018, 96), silver);
   edge.rotation.x = Math.PI / 2; edge.name = 'disc-edge'; disc.add(edge);
   const face = new T.Mesh(new T.RingGeometry(.095, .60, 96), silver);
