@@ -24,3 +24,7 @@ All room geometry is embedded in `public/assets/room.wasm` and all driving scene
 The game display and case use the supplied Cyberpunk artwork. The ACM mark is the supplied image. The 3D geometry is a visual reconstruction from reference photographs.
 
 Temporary screenshots, local notes, build output, and dependencies are ignored by Git.
+
+## Surface assets
+
+The driving scene uses locally hosted CC0 scanned maps by Rob Tuytel / Poly Haven: [Asphalt 02](https://polyhaven.com/a/asphalt_02), [Concrete Layers 02](https://polyhaven.com/a/concrete_layers_02), and [Concrete Floor 02](https://polyhaven.com/a/concrete_floor_02). Diffuse, OpenGL normal, and roughness maps are loaded from `public/assets/textures/`. Geometry remains in the WASM scene module.

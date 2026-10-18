@@ -1,12 +1,16 @@
 import * as T from "three";
-import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
-import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import {
+  material,
+  group,
+  mesh,
+  box,
+  cylinder,
+  rod,
+  patch,
+  bake,
+} from "./geometry.mjs";
+import { buildCar } from "./car-source.mjs";
 
-const material = (name, color, roughness = 0.8, metalness = 0.05) => {
-  const m = new T.MeshStandardMaterial({ color, roughness, metalness });
-  m.name = name;
-  return m;
-};
 const concrete = [0x8a887a, 0x656b69, 0x999383, 0x596368, 0x77766b].map(
   (c, i) => material(`concrete-${i}`, c),
 );
@@ -15,6 +19,7 @@ const dark = material("dark-metal", 0x182326, 0.6, 0.55);
 const glass = material("city-glass", 0x2b4c53, 0.22, 0.72);
 const window = material("window-light", 0x929b91, 0.47, 0.35);
 const yellow = material("road-yellow", 0xc5a642, 0.8);
+const railBlue = material("cladding-blue-rail", 0x345b6b, 0.67, 0.3);
 const white = material("road-white", 0xbeb9a2, 0.86);
 const red = material("tail-light", 0xee3531, 0.2);
 const rubber = material("rubber", 0x101719, 0.95);
@@ -31,97 +36,6 @@ let seed = 8301;
 function random() {
   seed = (seed * 1664525 + 1013904223) >>> 0;
   return seed / 4294967296;
-}
-function group(parent, name) {
-  const g = new T.Group();
-  g.name = name;
-  parent.add(g);
-  return g;
-}
-function mesh(parent, name, geo, mat, at = [0, 0, 0]) {
-  const m = new T.Mesh(geo, mat);
-  m.name = name;
-  m.position.set(...at);
-  parent.add(m);
-  return m;
-}
-function box(parent, name, size, at, mat, round = 0) {
-  return mesh(
-    parent,
-    name,
-    round
-      ? new RoundedBoxGeometry(...size, 2, round)
-      : new T.BoxGeometry(...size),
-    mat,
-    at,
-  );
-}
-function cylinder(parent, name, r1, r2, h, at, mat, segments = 12) {
-  return mesh(
-    parent,
-    name,
-    new T.CylinderGeometry(r1, r2, h, segments),
-    mat,
-    at,
-  );
-}
-function rod(parent, a, b, r, mat, name = "pipe") {
-  const start = new T.Vector3(...a),
-    end = new T.Vector3(...b),
-    d = end.clone().sub(start);
-  const m = cylinder(
-    parent,
-    name,
-    r,
-    r,
-    d.length(),
-    start.clone().add(end).multiplyScalar(0.5).toArray(),
-    mat,
-    8,
-  );
-  m.quaternion.setFromUnitVectors(new T.Vector3(0, 1, 0), d.normalize());
-  return m;
-}
-function patch(parent, name, vertices, mat) {
-  const g = new T.BufferGeometry();
-  g.setAttribute("position", new T.Float32BufferAttribute(vertices.flat(), 3));
-  g.setAttribute(
-    "uv",
-    new T.Float32BufferAttribute([0, 0, 1, 0, 1, 1, 0, 1], 2),
-  );
-  g.setIndex([0, 2, 1, 0, 3, 2]);
-  g.computeVertexNormals();
-  return mesh(parent, name, g, mat);
-}
-// Bake static detail into material batches. Named moving parts and sign faces stay separate.
-function bake(g) {
-  g.updateMatrixWorld(true);
-  const inverse = g.matrixWorld.clone().invert(),
-    batches = new Map(),
-    retained = [];
-  g.traverse((o) => {
-    if (!o.isMesh) return;
-    if (o.name.startsWith("sign-")) {
-      const copy = o.clone();
-      const transform = inverse.clone().multiply(o.matrixWorld);
-      transform.decompose(copy.position, copy.quaternion, copy.scale);
-      retained.push(copy);
-      return;
-    }
-    const geo = o.geometry.index
-      ? o.geometry.toNonIndexed()
-      : o.geometry.clone();
-    geo.applyMatrix4(inverse.clone().multiply(o.matrixWorld));
-    if (!batches.has(o.material)) batches.set(o.material, []);
-    batches.get(o.material).push(geo);
-  });
-  g.clear();
-  for (const [mat, geos] of batches) {
-    mesh(g, `${g.name}-${mat.name}`, mergeGeometries(geos), mat);
-    for (const geo of geos) geo.dispose();
-  }
-  if (retained.length) g.add(...retained);
-  return g;
 }
 function sign(parent, id, w, h, x, y, z, rotation = 0) {
   const mount = group(parent, `billboard-${id}`);
@@ -250,498 +164,335 @@ function person(parent, x, z, id) {
   cylinder(g, "hair", 0.117, 0.11, 0.09, [0, 1.64, 0], dark);
 }
 function building(parent, x, z, w, d, h, index) {
-  const g = group(parent, `city-block-${index}`),
-    mat = concrete[index % concrete.length];
-  box(g, "tower", [w, h, d], [x, h / 2, z], mat);
-  const inner = x < 0 ? x + w / 2 + 0.06 : x - w / 2 - 0.06;
-  const front = z + d / 2 + 0.04;
-  // Recessed windows, horizontal slabs, exterior service ducts and staggered balconies.
-  for (let y = 4; y < h - 1; y += 2.5) {
-    box(g, "floor-slab", [w + 0.22, 0.13, d + 0.2], [x, y - 0.7, z], steel);
-    for (let a = -w / 2 + 0.8; a < w / 2; a += 1.35) {
-      box(
-        g,
-        "front-window",
-        [0.75, 1.45, 0.08],
-        [x + a, y, front],
-        random() > 0.84 ? window : glass,
-      );
-      if (random() > 0.7)
-        box(
-          g,
-          "ac-unit",
-          [0.65, 0.38, 0.35],
-          [x + a, y - 0.8, front + 0.15],
-          steel,
-        );
-    }
-    for (let a = -d / 2 + 0.8; a < d / 2; a += 1.55)
-      box(
-        g,
-        "side-window",
-        [0.075, 1.48, 0.88],
-        [inner, y, z + a],
-        random() > 0.85 ? window : glass,
-      );
-    if (y < 25 && Math.floor(y) % 3 === 1) {
-      box(g, "balcony", [w * 0.6, 0.16, 1.2], [x, y - 0.8, front + 0.5], mat);
-      rod(
-        g,
-        [x - w * 0.3, y - 0.1, front + 1],
-        [x + w * 0.3, y - 0.1, front + 1],
-        0.035,
-        steel,
-      );
-      for (let a = -w * 0.3; a < w * 0.3; a += 0.55)
-        rod(
-          g,
-          [x + a, y - 0.8, front + 1],
-          [x + a, y - 0.1, front + 1],
-          0.022,
-          steel,
-        );
-    }
-  }
-  for (let a = -w / 2; a <= w / 2; a += w / 4)
-    box(g, "pilaster", [0.3, h + 0.2, 0.5], [x + a, h / 2, front + 0.2], steel);
-  for (let a = 0; a < 3; a++) {
-    const px = x - w * 0.35 + a * w * 0.35;
-    cylinder(g, "roof-vent", 0.38, 0.38, 1.3, [px, h + 0.55, z], steel);
+  const g = group(parent, `city-block-${index}`);
+  const trim = material(
+    `cladding-trim-${index}`,
+    index % 3 === 0 ? 0x885a3c : 0x4f6060,
+    0.66,
+    0.3,
+  );
+  const facade = material(
+    `concrete-facade-${index}`,
+    [0x84918a, 0x777f7b, 0xa1a296, 0x637979, 0x8f9186][index % 5],
+    0.9,
+  );
+  const side = x < 0 ? 1 : -1;
+  const tiers =
+    h < 25
+      ? [[0, h, w, d, 0]]
+      : [
+          [0, h * 0.36, w, d, 0],
+          [h * 0.36, h * 0.34, w * 0.87, d * 0.94, -side * w * 0.065],
+          [h * 0.7, h * 0.3, w * 0.72, d * 0.83, -side * w * 0.14],
+        ];
+  const glazing = Array.from({ length: 4 }, (_, i) =>
+    material(
+      `city-window-${i}`,
+      [0x3b5558, 0x526664, 0x223b43, 0x78817a][i],
+      0.25,
+      0.65,
+    ),
+  );
+  for (const [base, height, width, depth, shift] of tiers) {
+    const center = x + shift,
+      inner = center + (side * width) / 2,
+      front = z + depth / 2;
     box(
       g,
-      "roof-machinery",
-      [1.8, 1.3, 1.5],
-      [px, h + 0.65, z + 2],
-      concrete[1],
+      "tower-tier",
+      [width, height, depth],
+      [center, base + height / 2, z],
+      facade,
     );
-    rod(g, [px, h + 0.8, z], [px, h + 4 + random() * 4, z], 0.035, dark);
-  }
-  // Street-facing service balconies, exposed ducts and varied projecting masses.
-  const side = x < 0 ? 1 : -1;
-  for (let y = 4; y < Math.min(h, 45); y += 3.5) {
-    for (let a = -d / 2 + 1; a < d / 2; a += 3.1) {
+    box(
+      g,
+      "projecting-cornice",
+      [width + 0.65, 0.5, depth + 0.65],
+      [center, base + height - 0.25, z],
+      trim,
+    );
+    // Deep metal-framed window bays and slab edges break up the concrete masses.
+    for (let y = base + 2.8; y < base + height - 1; y += 2.8) {
       box(
         g,
-        "window-canopy",
-        [0.65, 0.12, 1.35],
-        [inner + side * 0.22, y + 1, z + a],
+        "floor-reveal",
+        [0.26, 0.17, depth + 0.12],
+        [inner + side * 0.12, y - 1.03, z],
         steel,
       );
-      if (random() > 0.55) {
+      box(
+        g,
+        "front-floor-reveal",
+        [width + 0.12, 0.17, 0.26],
+        [center, y - 1.03, front + 0.12],
+        steel,
+      );
+      for (let q = -depth / 2 + 1.3; q < depth / 2 - 0.7; q += 2.25) {
+        const pane = glazing[Math.floor(random() * 4)];
         box(
           g,
-          "external-ac",
-          [0.5, 0.55, 0.75],
-          [inner + side * 0.25, y - 0.6, z + a],
-          concrete[1],
+          "recessed-window",
+          [0.035, 1.61, 1.3],
+          [inner + side * 0.025, y, z + q],
+          pane,
         );
-        for (let k = 0; k < 5; k++)
+        for (const edge of [-1, 1])
           box(
             g,
-            "ac-grille",
-            [0.025, 0.045, 0.62],
-            [inner + side * 0.515, y - 0.8 + k * 0.09, z + a],
-            dark,
+            "window-jamb",
+            [0.2, 1.86, 0.09],
+            [inner + side * 0.12, y, z + q + edge * 0.72],
+            trim,
           );
-      }
-    }
-    if (Math.floor(y) % 2 === 0) {
-      box(
-        g,
-        "service-gallery",
-        [1.1, 0.12, d * 0.7],
-        [inner + side * 0.5, y - 0.9, z],
-        steel,
-      );
-      rod(
-        g,
-        [inner + side * 0.98, y - 0.1, z - d * 0.35],
-        [inner + side * 0.98, y - 0.1, z + d * 0.35],
-        0.025,
-        chrome,
-      );
-      for (let a = -d * 0.35; a < d * 0.35; a += 0.8)
-        rod(
+        box(
           g,
-          [inner + side * 0.98, y - 0.9, z + a],
-          [inner + side * 0.98, y - 0.1, z + a],
-          0.02,
+          "window-sill",
+          [0.36, 0.12, 1.55],
+          [inner + side * 0.16, y - 0.87, z + q],
           steel,
         );
+        box(
+          g,
+          "window-mullion",
+          [0.075, 1.63, 0.038],
+          [inner + side * 0.075, y, z + q],
+          steel,
+        );
+        if (random() > 0.73) {
+          box(
+            g,
+            "air-conditioner",
+            [0.65, 0.63, 0.9],
+            [inner + side * 0.3, y - 1.13, z + q],
+            concrete[1],
+          );
+          for (let v = 0; v < 6; v++)
+            box(
+              g,
+              "ac-vent",
+              [0.022, 0.045, 0.7],
+              [inner + side * 0.635, y - 1.35 + v * 0.08, z + q],
+              dark,
+            );
+        }
+      }
+      for (let q = -width / 2 + 1.3; q < width / 2 - 0.7; q += 2.25) {
+        box(
+          g,
+          "front-recessed-window",
+          [1.3, 1.61, 0.035],
+          [center + q, y, front + 0.025],
+          glazing[Math.floor(random() * 4)],
+        );
+        for (const edge of [-1, 1])
+          box(
+            g,
+            "front-window-jamb",
+            [0.09, 1.86, 0.2],
+            [center + q + edge * 0.72, y, front + 0.12],
+            trim,
+          );
+        box(
+          g,
+          "front-window-sill",
+          [1.55, 0.12, 0.36],
+          [center + q, y - 0.87, front + 0.16],
+          steel,
+        );
+        box(
+          g,
+          "front-window-mullion",
+          [0.038, 1.63, 0.075],
+          [center + q, y, front + 0.075],
+          steel,
+        );
+      }
+      if (Math.floor(y) % 3 === 0 && y < h * 0.65) {
+        box(
+          g,
+          "service-walkway",
+          [1.05, 0.12, depth * 0.65],
+          [inner + side * 0.5, y - 1.3, z],
+          steel,
+        );
+        for (let q = -depth * 0.32; q < depth * 0.32; q += 1.3)
+          rod(
+            g,
+            [inner + side * 0.95, y - 1.2, z + q],
+            [inner + side * 0.95, y - 0.45, z + q],
+            0.025,
+            trim,
+          );
+        rod(
+          g,
+          [inner + side * 0.95, y - 0.45, z - depth * 0.33],
+          [inner + side * 0.95, y - 0.45, z + depth * 0.33],
+          0.025,
+          trim,
+        );
+      }
+    }
+    for (let q = -depth / 2; q <= depth / 2; q += depth / 5)
+      box(
+        g,
+        "structural-buttress",
+        [0.55, height, 0.34],
+        [inner + side * 0.27, base + height / 2, z + q],
+        trim,
+      );
+    for (let q = -width / 2; q <= width / 2; q += width / 4)
+      box(
+        g,
+        "front-buttress",
+        [0.34, height, 0.55],
+        [center + q, base + height / 2, front + 0.27],
+        trim,
+      );
+    for (let i = 0; i < 3; i++) {
+      box(
+        g,
+        "roof-plant",
+        [2.3, 0.85, 1.7],
+        [center - width * 0.27 + i * width * 0.27, base + height + 0.42, z],
+        steel,
+      );
+      cylinder(
+        g,
+        "vent-stack",
+        0.2,
+        0.25,
+        2,
+        [center - width * 0.27 + i * width * 0.27, base + height + 1, z - 2],
+        steel,
+      );
     }
   }
-  for (let a = -d / 2 + 0.6; a < d / 2; a += 4.8) {
-    box(
-      g,
-      "facade-rib",
-      [0.38, h, 0.22],
-      [inner + side * 0.16, h / 2, z + a],
-      steel,
-    );
-    rod(
-      g,
-      [inner + side * 0.45, 1, z + a + 0.32],
-      [inner + side * 0.45, h * 0.8, z + a + 0.32],
-      0.07,
-      dark,
-    );
-  }
-  box(
-    g,
-    "setback-tower",
-    [w * 0.67, h * 0.28, d * 0.72],
-    [x - side * w * 0.15, h * 1.12, z - 1],
-    concrete[(index + 1) % 5],
-  );
-  if (index < 18) {
+  const inner = x + (side * w) / 2;
+  // Large signs stand out from the layered, weathered façades.
+  if (index < 7)
     sign(
       g,
-      index + 40,
-      index % 3 === 0 ? 3.5 : 7,
-      index % 3 === 0 ? 13 : 5,
-      inner + side * 1.25,
-      9 + (index % 4) * 5,
-      z + 3,
+      `hero-${index}`,
+      index % 2 ? 4 : 6,
+      index % 2 ? 11 : 4,
+      inner + side * 0.65,
+      Math.min(h * 0.48, 21),
+      z + d * 0.12,
       (side * Math.PI) / 2,
     );
-    if (index % 3 === 0)
-      sign(
-        g,
-        index + 65,
-        3,
-        8,
-        inner + side * 0.3,
-        h * 0.65,
-        z - 5,
-        (side * Math.PI) / 2,
-      );
-  }
-  for (let k = 0; k < 5; k++)
+  if (index % 2 === 0 && h > 30)
+    sign(
+      g,
+      `vertical-${index}`,
+      2.1,
+      13,
+      inner + side * 0.72,
+      h * 0.7,
+      z - d * 0.15,
+      (side * Math.PI) / 2,
+    );
+  box(
+    g,
+    "shop-recess",
+    [0.14, 2.7, 5.2],
+    [inner + side * 0.08, 1.55, z + d * 0.25],
+    dark,
+  );
+  for (let y = 0.55; y < 2.7; y += 0.18)
     box(
       g,
-      "shop-shutter",
-      [0.12, 0.18, 3.3],
-      [inner + side * 0.15, 0.5 + k * 0.28, z + d * 0.27],
+      "shop-roller-shutter",
+      [0.17, 0.045, 3.6],
+      [inner + side * 0.2, y, z + d * 0.27],
       steel,
     );
   box(
     g,
-    "shop-awning",
-    [2.2, 0.16, 5],
-    [inner + side, 3.1, z + d * 0.27],
-    index % 3 === 0 ? yellow : steel,
+    "shop-canopy",
+    [2.7, 0.22, 6.1],
+    [inner + side * 1.2, 3.15, z + d * 0.25],
+    trim,
   );
-  const inward = x < 0 ? x + w / 2 + 0.25 : x - w / 2 - 0.25;
-  for (let a = 0; a < 2; a++)
-    rod(g, [inward, 2, z + a * 1.2], [inward, h - 2, z + a * 1.2], 0.11, steel);
-  if (index % 2 === 0) {
-    sign(g, index, Math.min(w * 0.72, 7), 3.3, x, 5.4, front + 0.4);
-    if (h > 36)
-      sign(g, index + 20, 2.5, 10, x + w * 0.25, h * 0.67, front + 0.4);
+  for (const q of [-d * 0.27, d * 0.28]) {
+    rod(
+      g,
+      [inner + side * 0.6, 0.3, z + q],
+      [inner + side * 0.6, Math.min(21, h - 1), z + q],
+      0.13,
+      steel,
+    );
+    for (let y = 2; y < Math.min(21, h - 1); y += 3)
+      box(
+        g,
+        "pipe-bracket",
+        [0.7, 0.06, 0.11],
+        [inner + side * 0.3, y, z + q],
+        dark,
+      );
+  }
+  if (index === 0) {
+    // The reference's inset industrial frame and diagonal braces occupy the left foreground.
+    for (const q of [-8, 5]) {
+      box(
+        g,
+        "orange-frame-column",
+        [0.7, 13, 0.6],
+        [inner + 0.65, 9, z + q],
+        trim,
+      );
+      rod(g, [inner + 0.8, 5, z + q], [inner + 0.8, 14, z + q + 6], 0.15, trim);
+    }
+    for (let y = 5; y < 17; y += 1.5)
+      box(
+        g,
+        "industrial-louvre",
+        [0.55, 0.14, 12],
+        [inner + 0.45, y, z - 8],
+        steel,
+      );
+    sign(g, "militech", 7, 3, inner + 1.6, 8, z + 8, Math.PI / 2);
   }
   bake(g);
 }
-function sportsCar(parent) {
-  const car = group(parent, "player-car");
-  // Cross sections make the low, curved body continuous around all four sides.
-  const stations = [
-    [-2.36, 0.78, 0.63, 0.35],
-    [-2.13, 1.04, 0.78, 0.34],
-    [-1.6, 1.11, 0.85, 0.35],
-    [-0.7, 1.07, 0.87, 0.34],
-    [0.45, 1.08, 0.92, 0.35],
-    [1.35, 1.13, 0.96, 0.35],
-    [2.12, 1.09, 0.84, 0.35],
-    [2.32, 0.91, 0.72, 0.38],
-  ];
-  const vertices = [],
-    indices = [],
-    uv = [];
-  for (let j = 0; j < stations.length; j++) {
-    const [z, w, top, bottom] = stations[j];
-    for (let i = 0; i < 24; i++) {
-      const a = (i / 24) * Math.PI * 2,
-        c = Math.cos(a),
-        s = Math.sin(a);
-      vertices.push(
-        Math.sign(c) * Math.pow(Math.abs(c), 0.48) * w,
-        (top + bottom) / 2 +
-          (Math.sign(s) * Math.pow(Math.abs(s), 0.6) * (top - bottom)) / 2,
-        z,
-      );
-      uv.push(i / 24, j / (stations.length - 1));
-      if (j < stations.length - 1) {
-        const k = j * 24 + i,
-          n = j * 24 + ((i + 1) % 24);
-        indices.push(k, n, k + 24, n, n + 24, k + 24);
-      }
-    }
-  }
-  const body = new T.BufferGeometry();
-  body.setAttribute("position", new T.Float32BufferAttribute(vertices, 3));
-  body.setAttribute("uv", new T.Float32BufferAttribute(uv, 2));
-  body.setIndex(indices);
-  body.computeVertexNormals();
-  mesh(car, "sculpted-body", body, teal);
-  box(car, "underbody", [1.97, 0.24, 4.48], [0, 0.32, 0], dark, 0.13);
-  // Sloped glass cabin and narrow painted roof, set ahead of the rear engine vents.
-  patch(
-    car,
-    "windscreen",
-    [
-      [-0.84, 0.85, -0.92],
-      [0.84, 0.85, -0.92],
-      [0.65, 1.37, -0.23],
-      [-0.65, 1.37, -0.23],
-    ],
-    carGlass,
-  );
-  patch(
-    car,
-    "roof",
-    [
-      [-0.65, 1.37, -0.23],
-      [0.65, 1.37, -0.23],
-      [0.62, 1.38, 0.48],
-      [-0.62, 1.38, 0.48],
-    ],
-    teal,
-  );
-  patch(
-    car,
-    "rear-glass",
-    [
-      [0.62, 1.38, 0.48],
-      [0.85, 0.94, 1.08],
-      [-0.85, 0.94, 1.08],
-      [-0.62, 1.38, 0.48],
-    ],
-    carGlass,
-  );
-  for (const side of [-1, 1]) {
-    const pane = patch(
-      car,
-      "side-glass",
-      [
-        [side * 0.91, 0.87, -0.77],
-        [side * 0.68, 1.33, -0.2],
-        [side * 0.65, 1.34, 0.48],
-        [side * 0.94, 0.9, 1.02],
-      ],
-      carGlass,
+function roundTower(parent, x, z, r, h) {
+  const g = group(parent, "rounded-corporate-tower");
+  cylinder(g, "concrete-core", r, r, h, [x, h / 2, z], concrete[3], 48);
+  for (let y = 5; y < h; y += 3.2) {
+    const ring = mesh(
+      g,
+      "circular-ledge",
+      new T.TorusGeometry(r + 0.15, 0.12, 6, 64),
+      steel,
+      [x, y, z],
     );
-    pane.material.side = T.DoubleSide;
-    rod(
-      car,
-      [side * 0.94, 0.86, -0.89],
-      [side * 0.68, 1.37, -0.23],
-      0.035,
-      teal,
-    );
-    rod(car, [side * 0.65, 1.38, 0.48], [side * 0.95, 0.9, 1.1], 0.045, teal);
-    box(car, "sill", [0.08, 0.14, 3.65], [side * 1.075, 0.43, 0], teal, 0.03);
-    box(
-      car,
-      "intake",
-      [0.035, 0.21, 0.68],
-      [side * 1.09, 0.64, 0.75],
-      dark,
-      0.035,
-    );
-    box(
-      car,
-      "door-handle",
-      [0.035, 0.025, 0.22],
-      [side * 1.085, 0.86, 0.1],
-      chrome,
-      0.008,
-    );
-    box(
-      car,
-      "mirror",
-      [0.22, 0.1, 0.29],
-      [side * 1.16, 1.02, -0.62],
-      teal,
-      0.05,
-    );
-    for (const z of [-1.52, 1.47]) {
-      const wheel = group(car, `wheel-${side}-${z}`);
-      wheel.position.set(side * 1.03, 0.44, z);
-      const tyre = cylinder(
-        wheel,
-        "tyre",
-        0.45,
-        0.45,
-        0.25,
-        [0, 0, 0],
-        rubber,
-        40,
-      );
-      tyre.rotation.z = Math.PI / 2;
-      const rim = cylinder(
-        wheel,
-        "rim",
-        0.33,
-        0.33,
-        0.265,
-        [0, 0, 0],
-        chrome,
-        32,
-      );
-      rim.rotation.z = Math.PI / 2;
-      const inset = cylinder(
-        wheel,
-        "rim-inset",
-        0.27,
-        0.27,
-        0.275,
-        [0, 0, 0],
-        dark,
-        32,
-      );
-      inset.rotation.z = Math.PI / 2;
-      for (let spoke = 0; spoke < 10; spoke++) {
-        const a = (spoke * Math.PI) / 5;
-        rod(
-          wheel,
-          [side * 0.142, 0, 0],
-          [side * 0.142, Math.sin(a) * 0.3, Math.cos(a) * 0.3],
-          0.025,
-          chrome,
-          "spoke",
+    ring.rotation.x = Math.PI / 2;
+    for (let i = 0; i < 36; i++) {
+      const a = (i / 36) * Math.PI * 2,
+        win = box(
+          g,
+          "curved-tower-window",
+          [0.9, 1.9, 0.05],
+          [
+            x + Math.sin(a) * (r + 0.025),
+            y + 1.45,
+            z + Math.cos(a) * (r + 0.025),
+          ],
+          glass,
         );
-      }
-      const hub = cylinder(
-        wheel,
-        "hub",
-        0.07,
-        0.07,
-        0.29,
-        [0, 0, 0],
-        chrome,
-        16,
-      );
-      hub.rotation.z = Math.PI / 2;
-      bake(wheel);
+      win.rotation.y = a;
     }
   }
-  for (const side of [-1, 1]) {
-    for (const z of [-1.52, 1.47]) {
-      const arch = mesh(
-        car,
-        "sculpted-wheel-arch",
-        new T.TorusGeometry(0.46, 0.072, 8, 32, Math.PI),
-        teal,
-        [side * 1.11, 0.43, z],
-      );
-      arch.rotation.y = Math.PI / 2;
-    }
-    const cream = material("car-ivory-panel", 0xc9d0ba, 0.29, 0.4);
-    cream.side = T.DoubleSide;
-    patch(
-      car,
-      "front-quarter-ivory",
-      [
-        [side * 1.12, 0.85, -1.89],
-        [side * 1.09, 0.84, -0.81],
-        [side * 1.09, 0.51, -0.64],
-        [side * 1.13, 0.47, -1.78],
-      ],
-      cream,
-    );
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * Math.PI * 2;
     rod(
-      car,
-      [side * 1.09, 0.83, -0.78],
-      [side * 1.09, 0.52, 0.53],
-      0.008,
-      dark,
-      "door-panel-gap",
-    );
-    box(
-      car,
-      "rear-aero-fin",
-      [0.035, 0.08, 0.5],
-      [side * 0.94, 0.98, 1.86],
-      teal,
-      0.01,
-    );
-  }
-  box(car, "hood-sculpt", [1.25, 0.045, 1.1], [0, 0.85, -1.47], teal, 0.07);
-  for (const side of [-1, 1])
-    box(
-      car,
-      "hood-vent",
-      [0.16, 0.025, 0.49],
-      [side * 0.6, 0.885, -1.25],
-      dark,
-      0.025,
-    );
-  for (let i = 0; i < 9; i++)
-    box(
-      car,
-      "engine-louvre",
-      [1.38, 0.028, 0.07],
-      [0, 1.0 - i * 0.014, 1.12 + i * 0.085],
-      dark,
-      0.008,
-    );
-  box(car, "rear-bumper", [1.98, 0.28, 0.15], [0, 0.49, 2.19], dark, 0.06);
-  box(car, "rear-grille", [1.38, 0.16, 0.035], [0, 0.73, 2.3], dark, 0.02);
-  box(
-    car,
-    "yellow-rear-accent",
-    [1.94, 0.025, 0.028],
-    [0, 0.58, 2.3],
-    yellow,
-    0.006,
-  );
-  for (const side of [-1, 1]) {
-    const light = box(
-      car,
-      "rear-light",
-      [0.6, 0.055, 0.04],
-      [side * 0.72, 0.82, 2.22],
-      red,
-      0.02,
-    );
-    light.rotation.z = side * 0.1;
-    const tip = box(
-      car,
-      "rear-light-tip",
-      [0.16, 0.045, 0.045],
-      [side * 0.48, 0.77, 2.26],
-      red,
-      0.01,
-    );
-    tip.rotation.z = side * -0.5;
-    const lamp = box(
-      car,
-      "headlamp",
-      [0.54, 0.045, 0.08],
-      [side * 0.69, 0.71, -2.17],
-      white,
-      0.02,
-    );
-    lamp.rotation.y = side * 0.13;
-    const exhaust = cylinder(
-      car,
-      "exhaust",
+      g,
+      [x + Math.sin(a) * (r + 0.12), 0, z + Math.cos(a) * (r + 0.12)],
+      [x + Math.sin(a) * (r + 0.12), h, z + Math.cos(a) * (r + 0.12)],
       0.08,
-      0.08,
-      0.19,
-      [side * 0.71, 0.4, 2.31],
       chrome,
-      16,
     );
-    exhaust.rotation.x = Math.PI / 2;
   }
-  box(car, "rear-plate", [0.32, 0.15, 0.018], [0, 0.52, 2.285], chrome, 0.012);
-  // Keep the four wheel groups independent; the rest becomes a handful of materials.
-  const wheels = car.children.filter((o) => o.name.startsWith("wheel-"));
-  car.remove(...wheels);
-  bake(car);
-  car.add(...wheels);
-  return car;
+  bake(g);
 }
 function van(parent, x, z, color = 0x8b8c80, id = 0) {
   const g = group(parent, `traffic-${id}`);
@@ -849,8 +600,15 @@ export function createCity() {
       );
     if (z % 2 < 1) {
       for (const x of [-13.8, 8.6]) {
-        box(street, "rail-post", [0.09, 1, 0.09], [x, 0.78, z], steel);
-        rod(street, [x, 1.2, z], [x, 1.2, z - 5.4], 0.04, chrome);
+        box(street, "rail-post", [0.09, 1, 0.09], [x, 0.78, z], yellow);
+        rod(street, [x, 1.2, z], [x, 1.2, z - 5.4], 0.035, yellow);
+        box(
+          street,
+          "blue-barrier-beam",
+          [0.13, 0.16, 5.4],
+          [x, 0.43, z - 2.7],
+          railBlue,
+        );
         box(
           street,
           "safety-panel",
@@ -951,22 +709,41 @@ export function createCity() {
       rod(street, [-15, y + 0.65, z], [-15, y, z - 1.5], 0.009, steel);
     }
   }
-  for (const z of [-36, -122, -219, -305]) {
+  for (const [z, y] of [
+    [-52, 14],
+    [-113, 7.7],
+    [-216, 12],
+  ]) {
     const g = group(root, `elevated-crossing-${-z}`);
-    box(g, "bridge-deck", [62, 0.8, 4.3], [-3, 11.2, z], steel);
-    for (const x of [-19, 17]) {
-      box(g, "bridge-pier", [1.1, 11, 1.3], [x, 5.5, z], concrete[1]);
-      for (const offset of [-1.8, 1.8])
-        rod(g, [x, 10.4, z + offset], [x + 2, 11.2, z + offset], 0.13, steel);
+    box(g, "elevated-deck", [60, 0.65, 3.2], [-3, y, z], steel);
+    for (const x of [-19, 15]) {
+      box(g, "bridge-support", [0.7, y, 1], [x, y / 2, z], concrete[1]);
+      for (const offset of [-1.2, 1.2])
+        rod(
+          g,
+          [x, y - 2, z + offset],
+          [x + (x < 0 ? 2 : -2), y, z + offset],
+          0.13,
+          steel,
+        );
     }
-    for (const offset of [-2, 2]) {
-      box(g, "parapet", [62, 1.0, 0.13], [-3, 11.9, z + offset], steel);
-      box(g, "bridge-rail", [62, 0.1, 0.12], [-3, 12.62, z + offset], chrome);
-      for (let x = -32; x < 28; x += 2)
-        rod(g, [x, 11.6, z + offset], [x, 12.6, z + offset], 0.035, chrome);
+    for (const dz of [-1.5, 1.5]) {
+      box(
+        g,
+        "bridge-edge-beam",
+        [60, 0.54, 0.18],
+        [-3, y + 0.38, z + dz],
+        concrete[1],
+      );
+      rod(g, [-33, y + 1.25, z + dz], [27, y + 1.25, z + dz], 0.035, chrome);
+      for (let x = -33; x < 28; x += 2)
+        rod(g, [x, y + 0.5, z + dz], [x, y + 1.25, z + dz], 0.025, chrome);
     }
-    for (let x = -30; x < 28; x += 3)
-      box(g, "bridge-rib", [0.18, 0.35, 4.4], [x, 10.65, z], dark);
+    if (z === -52) {
+      for (const x of [-9, -4, 2, 8])
+        rod(g, [15, 19, z], [x, y + 0.3, z - 1.2], 0.02, dark);
+      box(g, "cable-pylon", [0.5, 19, 0.6], [15, 9.5, z], steel);
+    }
     bake(g);
   }
   for (const z of [-24, -89, -180, -270]) {
@@ -993,27 +770,51 @@ export function createCity() {
       rod(street, [-26, y, z + 1], [24, y, z + 1], 0.012, dark);
   }
   bake(street);
-  for (let i = 0; i < 13; i++) {
-    const z = -10 - i * 27;
-    building(
-      root,
-      -24 - random() * 4,
-      z,
-      16 + random() * 8,
-      23,
-      30 + random() * 59,
-      i * 2,
+  const blocks = [
+    [-29, -22, 26, 44, 49],
+    [-32, -69, 23, 32, 74],
+    [-27, -112, 19, 28, 102],
+    [-34, -158, 28, 36, 65],
+    [-29, -204, 22, 33, 94],
+    [-31, -256, 24, 43, 116],
+    [-28, -315, 23, 38, 85],
+    [25, -25, 18, 50, 17],
+    [32, -86, 25, 38, 47],
+    [26, -139, 18, 31, 73],
+    [32, -194, 26, 41, 92],
+    [27, -251, 20, 35, 68],
+    [30, -310, 24, 42, 108],
+  ];
+  blocks.forEach(([x, z, w, d, h], i) => building(root, x, z, w, d, h, i));
+  roundTower(root, -29, -93, 5.8, 79);
+  const utilities = group(root, "fenced-utility-yard");
+  for (let i = 0; i < 5; i++) {
+    box(
+      utilities,
+      "power-transformer",
+      [2.6, 3.1, 2.4],
+      [-18, 1.6, -22 - i * 4.1],
+      concrete[2],
+      0.05,
     );
-    building(
-      root,
-      24 + random() * 3,
-      z - 9,
-      14 + random() * 6,
-      23,
-      34 + random() * 65,
-      i * 2 + 1,
+    const top = box(
+      utilities,
+      "sloped-transformer-top",
+      [2.8, 0.22, 2.7],
+      [-18, 3.2, -22 - i * 4.1],
+      steel,
     );
+    top.rotation.z = 0.12;
+    for (let j = 0; j < 12; j++)
+      box(
+        utilities,
+        "cooling-fin",
+        [0.25, 2.4, 0.055],
+        [-16.58, 1.6, -23.03 - i * 4.1 + j * 0.19],
+        steel,
+      );
   }
+  bake(utilities);
   const skyline = group(root, "distant-skyline");
   for (let i = 0; i < 30; i++) {
     const h = 28 + random() * 130;
@@ -1026,12 +827,13 @@ export function createCity() {
     );
   }
   bake(skyline);
-  sign(root, "hotel", 4.6, 2.2, -19, 13.5, 1);
-  sign(root, "kiosk", 1.8, 3.1, 14.2, 2.2, -3);
-  sportsCar(root);
-  van(root, -5.4, -5, 0x929185, 0);
+  sign(root, "hotel", 4.6, 2.2, -15.4, 10.5, -5, Math.PI / 2);
+  sign(root, "kiosk", 1.5, 2.7, 11.6, 1.75, -4.5);
+  sign(root, "right-poster", 4.5, 7, 16, 13, -7, -0.25);
+  buildCar(root);
+  van(root, -5.4, -2.5, 0x929185, 0);
   van(root, -8.8, -25, 0x747c70, 1);
-  van(root, -1.1, -50, 0x526c5f, 2);
+  van(root, -1.1, -44, 0x526c5f, 2).scale.set(1.3, 1.5, 1.3);
   van(root, 5.9, -83, 0x707b77, 3);
   van(root, -5.3, -137, 0x9e9785, 4);
   const checkpoints = group(root, "checkpoints");

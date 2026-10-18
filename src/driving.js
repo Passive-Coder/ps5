@@ -1,5 +1,11 @@
 import * as T from "three";
 import { loadWasmModel } from "./wasm-model.js";
+import { GTAOPass } from "three/addons/postprocessing/GTAOPass.js";
+import {
+  canvasTexture,
+  loadCityMaterials,
+  decorateCity,
+} from "./city-materials.js";
 import {
   AOIS,
   CHECKPOINT_DISTANCES,
@@ -7,126 +13,15 @@ import {
   DriveState,
 } from "./checkpoints.js";
 
-function canvasTexture(width, height, draw) {
-  const c = document.createElement("canvas");
-  c.width = width;
-  c.height = height;
-  draw(c.getContext("2d"), width, height);
-  const texture = new T.CanvasTexture(c);
-  texture.colorSpace = T.SRGBColorSpace;
-  return texture;
-}
-function surfaceTexture(road = false) {
-  const texture = canvasTexture(512, 512, (ctx, w, h) => {
-    let seed = 4819;
-    const rnd = () => {
-      seed = (seed * 1664525 + 1013904223) >>> 0;
-      return seed / 4294967296;
-    };
-    const data = ctx.createImageData(w, h);
-    for (let i = 0; i < data.data.length; i += 4) {
-      const x = (i / 4) % w,
-        y = Math.floor(i / 4 / w),
-        mottled = Math.sin(x * 0.028) * Math.cos(y * 0.022) * 7;
-      const v = (road ? 155 : 195) + rnd() * 37 + mottled;
-      data.data[i] = v;
-      data.data[i + 1] = v;
-      data.data[i + 2] = v - (road ? 2 : 9);
-      data.data[i + 3] = 255;
-    }
-    ctx.putImageData(data, 0, 0);
-    ctx.strokeStyle = road ? "#53585688" : "#6c6b5a22";
-    ctx.lineWidth = 0.7;
-    for (let i = 0; i < 30; i++) {
-      let x = rnd() * w,
-        y = rnd() * h;
-      ctx.beginPath();
-      ctx.moveTo(x, y);
-      for (let k = 0; k < 7; k++) {
-        x += (rnd() - 0.5) * 22;
-        y += rnd() * 19;
-        ctx.lineTo(x, y);
-      }
-      ctx.stroke();
-    }
-    if (road) {
-      ctx.globalAlpha = 0.06;
-      ctx.fillStyle = "#161e1a";
-      for (let i = 0; i < 18; i++) ctx.fillRect(rnd() * w, 0, 2 + rnd() * 6, h);
-    }
-  });
-  texture.wrapS = texture.wrapT = T.RepeatWrapping;
-  texture.repeat.set(road ? 4 : 2, road ? 75 : 4);
-  texture.anisotropy = 4;
-  return texture;
-}
-const ADS = [
-  ["NIGHT CITY", "FREE CITY • 2077", "#ddc885", "#293b3d"],
-  ["MILITECH", "INTERNATIONAL ARMAMENTS", "#e4dab3", "#313b3b"],
-  ["ARASAKA", "SECURE YOUR FUTURE", "#d95241", "#202e32"],
-  ["KIROSHI", "SEE WHAT'S NEXT", "#7dd2d3", "#273e42"],
-  ["SOFTSYS", "CONNECTED. ALWAYS.", "#94d6c5", "#203c42"],
-  ["DATA INC", "THE FUTURE IS YOURS", "#b3d5d8", "#2d4450"],
-  ["NCART", "CITY TRANSIT NETWORK", "#dec889", "#405255"],
-];
-function adTexture(name) {
-  return canvasTexture(512, 512, (c, w, h) => {
-    const n = Number(name.replace("sign-", "")) || 0,
-      ad = ADS[Math.abs(n) % ADS.length];
-    c.fillStyle = ad[3];
-    c.fillRect(0, 0, w, h);
-    c.strokeStyle = ad[2];
-    c.lineWidth = 5;
-    c.strokeRect(16, 16, w - 32, h - 32);
-    c.globalAlpha = 0.15;
-    for (let i = 0; i < 18; i++) {
-      c.fillStyle = ad[2];
-      c.fillRect(27, 30 + i * 25, Math.sin(i * 7.3) * 140 + 200, 2);
-    }
-    c.globalAlpha = 1;
-    c.textAlign = "center";
-    c.fillStyle = ad[2];
-    c.font = "900 64px Arial";
-    if (name === "sign-hotel") {
-      c.fillText("HOTEL", w / 2, 230);
-      c.font = "24px Arial";
-      c.fillText("ホテル", w / 2, 286);
-    } else if (name === "sign-kiosk") {
-      c.fillStyle = "#bd923b";
-      c.fillRect(0, 0, w, h);
-      c.fillStyle = "#2d392e";
-      c.font = "900 65px Arial";
-      c.fillText("ALL FOODS", 256, 102);
-      c.beginPath();
-      c.arc(256, 270, 85, 0, Math.PI * 2);
-      c.fill();
-      c.fillStyle = "#dac084";
-      c.fillRect(219, 240, 74, 80);
-      c.font = "24px Arial";
-      c.fillText("TASTE TOMORROW", 256, 425);
-    } else {
-      c.save();
-      c.translate(256, 236);
-      if (n >= 20) c.rotate(-Math.PI / 2);
-      c.fillText(ad[0], 0, 0);
-      c.font = "16px Arial";
-      c.fillText(ad[1], 0, 42);
-      c.restore();
-      c.fillStyle = ad[2];
-      c.font = "900 106px Arial";
-      c.fillText(n % 2 ? "77" : "NC", 256, 408);
-    }
-    c.globalAlpha = 0.1;
-    c.fillStyle = "#000";
-    for (let i = 0; i < h; i += 3) c.fillRect(0, i, w, 1);
-  });
-}
 export class DrivingGame {
   static async create(renderer, environment, onState) {
-    const root = await loadWasmModel("/assets/city.wasm");
-    return new DrivingGame(renderer, root, environment, onState);
+    const [root, assets] = await Promise.all([
+      loadWasmModel("/assets/city.wasm"),
+      loadCityMaterials(renderer),
+    ]);
+    return new DrivingGame(renderer, root, environment, onState, assets);
   }
-  constructor(renderer, root, environment, onState) {
+  constructor(renderer, root, environment, onState, assets) {
     this.renderer = renderer;
     this.root = root;
     this.time = 0;
@@ -135,18 +30,18 @@ export class DrivingGame {
     this.scene.add(root);
     this.scene.background = canvasTexture(4, 512, (c, w, h) => {
       const g = c.createLinearGradient(0, 0, 0, h);
-      g.addColorStop(0, "#b4bcb9");
-      g.addColorStop(0.6, "#e0ddc9");
-      g.addColorStop(1, "#e7dfc5");
+      g.addColorStop(0, "#aebbc0");
+      g.addColorStop(0.6, "#deddd2");
+      g.addColorStop(1, "#f0e8d6");
       c.fillStyle = g;
       c.fillRect(0, 0, w, h);
     });
-    this.scene.fog = new T.FogExp2(0xd5d4c0, 0.0062);
+    this.scene.fog = new T.Fog(0xe0dbca, 65, 330);
     this.scene.environment = environment;
-    this.scene.environmentIntensity = 0.32;
-    this.scene.add(new T.HemisphereLight(0xd6e4eb, 0x7e7560, 1.65));
-    this.sun = new T.DirectionalLight(0xffebbd, 3.25);
-    this.sun.position.set(35, 65, -45);
+    this.scene.environmentIntensity = 0.42;
+    this.scene.add(new T.HemisphereLight(0xb7d6e5, 0x716853, 1.5));
+    this.sun = new T.DirectionalLight(0xffefd2, 4.1);
+    this.sun.position.set(55, 95, -45);
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(2048, 2048);
     Object.assign(this.sun.shadow.camera, {
@@ -157,7 +52,8 @@ export class DrivingGame {
       near: 1,
       far: 180,
     });
-    this.sun.shadow.normalBias = 0.05;
+    this.sun.shadow.normalBias = 0.025;
+    this.sun.shadow.radius = 2;
     this.sun.shadow.bias = -0.0003;
     this.scene.add(this.sun, this.sun.target);
     this.camera = new T.PerspectiveCamera(53, 16 / 9, 0.08, 650);
@@ -167,6 +63,16 @@ export class DrivingGame {
       samples: 2,
     });
     this.target.texture.name = "Live 3D street";
+    this.beautyTarget = this.target.clone();
+    this.ao = new GTAOPass(this.scene, this.camera, 768, 432);
+    this.ao.updateGtaoMaterial({
+      radius: 1.1,
+      thickness: 0.35,
+      distanceFallOff: 0.7,
+      scale: 0.8,
+      samples: 16,
+    });
+    this.ao.blendIntensity = 0.62;
     this.sampleTarget = new T.WebGLRenderTarget(64, 36, { depthBuffer: false });
     this.pixels = new Uint8Array(64 * 36 * 4);
     this.sampleScene = new T.Scene();
@@ -184,39 +90,7 @@ export class DrivingGame {
     );
     this.sampleScene.add(this.sampleQuad);
     this.colors = Array.from({ length: 12 }, () => new T.Color());
-    const asphalt = surfaceTexture(true),
-      concrete = surfaceTexture(),
-      materials = new Set();
-    root.traverse((o) => {
-      if (!o.isMesh) return;
-      o.castShadow = true;
-      o.receiveShadow = true;
-      const m = o.material;
-      if (!materials.has(m)) {
-        materials.add(m);
-        if (m.name === "asphalt") {
-          m.map = asphalt;
-          m.roughness = 0.97;
-        } else if (m.name.startsWith("concrete-")) m.map = concrete;
-        else if (m.name === "tail-light") {
-          m.emissive = new T.Color(0xf92516);
-          m.emissiveIntensity = 1.2;
-        } else if (m.name.startsWith("checkpoint-")) {
-          m.emissive = new T.Color(0xb7d94a);
-          m.emissiveIntensity = 0.7;
-        }
-      }
-      if (o.name.startsWith("sign-")) {
-        o.material = new T.MeshStandardMaterial({
-          map: adTexture(o.name),
-          roughness: 0.72,
-          emissive: 0xffffff,
-          emissiveIntensity: 0.5,
-        });
-        o.material.emissiveMap = o.material.map;
-        o.castShadow = false;
-      }
-    });
+    decorateCity(root, assets);
     this.car = root.getObjectByName("player-car");
     this.wheels = this.car.children.filter((o) => o.name.startsWith("wheel-"));
     this.markers = CHECKPOINT_DISTANCES.map((_, i) =>
@@ -241,12 +115,12 @@ export class DrivingGame {
     this.car.visible = true;
     this.markers.forEach((m) => (m.visible = true));
     const paint = new T.MeshPhysicalMaterial({
-      color: 0x087b87,
-      metalness: 0.68,
+      color: 0x087b88,
+      metalness: 0.55,
       roughness: 0.24,
       clearcoat: 1,
       clearcoatRoughness: 0.16,
-      envMapIntensity: 0.8,
+      envMapIntensity: 1.15,
     });
     this.car.traverse((o) => {
       if (o.isMesh && o.material.name === "car-paint") o.material = paint;
@@ -269,9 +143,9 @@ export class DrivingGame {
     for (const wheel of this.wheels)
       wheel.rotation.x -= (this.state.distance - before) / 0.45;
     const distance = this.state.distance;
-    this.camera.position.set(7.8, 3.6, 7.4 - distance);
-    this.camera.lookAt(1.8, 1.8, -8 - distance);
-    this.sun.position.set(35, 65, -45 - distance);
+    this.camera.position.set(7.0, 3.45, 7.4 - distance);
+    this.camera.lookAt(2.7, 1.8, -8 - distance);
+    this.sun.position.set(55, 95, -45 - distance);
     this.sun.target.position.set(0, 0, -35 - distance);
     this.markers.forEach((marker, i) => {
       marker.visible = this.state.arrived !== i;
@@ -286,8 +160,12 @@ export class DrivingGame {
     });
   }
   render() {
-    this.renderer.setRenderTarget(this.target);
+    this.renderer.setRenderTarget(this.beautyTarget);
     this.renderer.render(this.scene, this.camera);
+    const shadowUpdate = this.renderer.shadowMap.autoUpdate;
+    this.renderer.shadowMap.autoUpdate = false;
+    this.ao.render(this.renderer, this.target, this.beautyTarget);
+    this.renderer.shadowMap.autoUpdate = shadowUpdate;
     if (this.time - this.lastSample > 0.2) {
       this.renderer.setRenderTarget(this.sampleTarget);
       this.renderer.render(this.sampleScene, this.sampleCamera);
