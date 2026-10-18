@@ -15,10 +15,19 @@ global.document = {
   }),
 };
 async function exportModel(source, filename) {
-  const document = new Document(),
-    buffer = document.createBuffer();
+  const io = new NodeIO()
+    .registerExtensions([KHRDracoMeshCompression, KHRMaterialsUnlit])
+    .registerDependencies({
+      "draco3d.encoder": await draco.createEncoderModule(),
+      "draco3d.decoder": await draco.createDecoderModule(),
+    });
+  const imported = typeof source === "string";
+  const document = imported ? await io.read(source) : new Document(),
+    buffer = imported
+      ? document.getRoot().listBuffers()[0]
+      : document.createBuffer();
   const unlit = document.createExtension(KHRMaterialsUnlit);
-  const scene = document.createScene(source.name);
+  const scene = imported ? null : document.createScene(source.name);
   const materialCache = new Map();
   let meshCount = 0;
   function convert(object) {
@@ -83,7 +92,8 @@ async function exportModel(source, filename) {
     for (const child of object.children) node.addChild(convert(child));
     return node;
   }
-  scene.addChild(convert(source));
+  if (imported) meshCount = document.getRoot().listMeshes().length;
+  else scene.addChild(convert(source));
   document
     .createExtension(KHRDracoMeshCompression)
     .setRequired(true)
@@ -96,12 +106,6 @@ async function exportModel(source, filename) {
         NORMAL: filename === "city" ? 12 : 10,
         TEXCOORD: filename === "city" ? 16 : 12,
       },
-    });
-  const io = new NodeIO()
-    .registerExtensions([KHRDracoMeshCompression, KHRMaterialsUnlit])
-    .registerDependencies({
-      "draco3d.encoder": await draco.createEncoderModule(),
-      "draco3d.decoder": await draco.createDecoderModule(),
     });
   const glb = await io.writeBinary(document);
   const jsonSize = new DataView(glb.buffer, glb.byteOffset).getUint32(12, true);
@@ -192,6 +196,7 @@ async function exportModel(source, filename) {
 
 await exportModel(createRoom(), "room");
 await exportModel(createCity(), "city");
+await exportModel("scripts/assets/pedestrian.glb", "pedestrian");
 for (const file of ["draco_wasm_wrapper.js", "draco_decoder.wasm"])
   await copyFile(
     `node_modules/three/examples/jsm/libs/draco/gltf/${file}`,

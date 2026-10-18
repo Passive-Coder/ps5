@@ -1,6 +1,7 @@
 import * as T from "three";
 import { loadWasmModel } from "./wasm-model.js";
 import { GTAOPass } from "three/addons/postprocessing/GTAOPass.js";
+import { clone as cloneSkeleton } from "three/addons/utils/SkeletonUtils.js";
 import {
   canvasTexture,
   loadCityMaterials,
@@ -9,6 +10,8 @@ import {
 import {
   AOIS,
   DRIVE_LANE_X,
+  roadX,
+  roadHeading,
   CHECKPOINT_DISTANCES,
   QUESTIONS,
   DriveState,
@@ -16,13 +19,21 @@ import {
 
 export class DrivingGame {
   static async create(renderer, environment, onState) {
-    const [root, assets] = await Promise.all([
+    const [root, assets, pedestrian] = await Promise.all([
       loadWasmModel("/assets/city.wasm"),
       loadCityMaterials(renderer),
+      loadWasmModel("/assets/pedestrian.wasm"),
     ]);
-    return new DrivingGame(renderer, root, environment, onState, assets);
+    return new DrivingGame(
+      renderer,
+      root,
+      environment,
+      onState,
+      assets,
+      pedestrian,
+    );
   }
-  constructor(renderer, root, environment, onState, assets) {
+  constructor(renderer, root, environment, onState, assets, pedestrian) {
     this.renderer = renderer;
     this.root = root;
     this.time = 0;
@@ -37,14 +48,14 @@ export class DrivingGame {
       c.fillStyle = g;
       c.fillRect(0, 0, w, h);
     });
-    this.scene.fog = new T.Fog(0xe0dbca, 65, 330);
+    this.scene.fog = new T.Fog(0xe3ddcb, 48, 270);
     this.scene.environment = environment;
-    this.scene.environmentIntensity = 0.42;
-    this.scene.add(new T.HemisphereLight(0xb7d6e5, 0x716853, 1.5));
-    this.sun = new T.DirectionalLight(0xffefd2, 4.1);
+    this.scene.environmentIntensity = 0.65;
+    this.scene.add(new T.HemisphereLight(0xbcd0d6, 0x8a7d64, 2.1));
+    this.sun = new T.DirectionalLight(0xfff0d5, 5.2);
     this.sun.position.set(55, 70, -75);
     this.sun.castShadow = true;
-    this.sun.shadow.mapSize.set(2048, 2048);
+    this.sun.shadow.mapSize.set(4096, 4096);
     Object.assign(this.sun.shadow.camera, {
       left: -35,
       right: 35,
@@ -57,7 +68,7 @@ export class DrivingGame {
     this.sun.shadow.radius = 2;
     this.sun.shadow.bias = -0.0003;
     this.scene.add(this.sun, this.sun.target);
-    this.camera = new T.PerspectiveCamera(53, 16 / 9, 0.08, 650);
+    this.camera = new T.PerspectiveCamera(54, 16 / 9, 0.08, 650);
     this.target = new T.WebGLRenderTarget(1536, 864, {
       type: T.HalfFloatType,
       depthBuffer: true,
@@ -92,6 +103,38 @@ export class DrivingGame {
     this.sampleScene.add(this.sampleQuad);
     this.colors = Array.from({ length: 12 }, () => new T.Color());
     decorateCity(root, assets);
+    this.people = [];
+    const height = new T.Box3()
+      .setFromObject(pedestrian)
+      .getSize(new T.Vector3()).y;
+    const walk = pedestrian.userData.animationClips.find(
+      (clip) => clip.name === "Walk",
+    );
+    for (let i = 0; i < 14; i++) {
+      const person = cloneSkeleton(pedestrian);
+      person.scale.multiplyScalar((1.78 + (i % 3) * 0.04) / height);
+      person.traverse((o) => {
+        if (!o.isMesh) return;
+        o.castShadow = o.receiveShadow = true;
+        o.material = o.material.clone();
+        o.material.roughness = 0.88;
+        if (o.material.name === "VanguardBodyMat")
+          o.material.color.set(
+            i === 0 ? 0xb7a189 : [0x9aa5a0, 0x8c9694, 0x8c8a76][i % 3],
+          );
+      });
+      const mixer = new T.AnimationMixer(person);
+      if (walk) mixer.clipAction(walk).play();
+      mixer.setTime(0.33 + i * 0.21);
+      this.scene.add(person);
+      this.people.push({
+        root: person,
+        mixer,
+        x: i === 0 ? 10.65 : 11.2 + (i % 3) * 1.1,
+        z: i === 0 ? 1 : -8 - i * 13,
+        direction: i % 4 === 3 ? -1 : 1,
+      });
+    }
     this.car = root.getObjectByName("player-car");
     this.wheels = this.car.children.filter((o) => o.name.startsWith("wheel-"));
     this.markers = CHECKPOINT_DISTANCES.map((_, i) =>
@@ -116,17 +159,17 @@ export class DrivingGame {
     this.car.visible = true;
     this.markers.forEach((m) => (m.visible = true));
     const paint = new T.MeshPhysicalMaterial({
-      color: 0x087b88,
-      metalness: 0.55,
-      roughness: 0.24,
+      color: 0x147e8a,
+      metalness: 0.66,
+      roughness: 0.19,
       clearcoat: 1,
-      clearcoatRoughness: 0.09,
-      envMapIntensity: 1.15,
+      clearcoatRoughness: 0.07,
+      envMapIntensity: 1.5,
     });
     const pearl = new T.MeshPhysicalMaterial({
-      color: 0xd7d8c9,
+      color: 0xe9e8db,
       metalness: 0.32,
-      roughness: 0.22,
+      roughness: 0.18,
       clearcoat: 1,
       clearcoatRoughness: 0.1,
       envMapIntensity: 1,
@@ -153,20 +196,28 @@ export class DrivingGame {
     this.time += delta;
     const before = this.state.distance;
     this.state.update(delta);
+    for (const person of this.people) {
+      person.mixer.update(delta * 0.72);
+      const d = -person.z + this.time * 0.46 * person.direction;
+      person.root.position.set(person.x + roadX(d) - DRIVE_LANE_X, 0.26, -d);
+      person.root.rotation.y =
+        (person.direction > 0 ? Math.PI : 0) + roadHeading(d);
+    }
     this.car.position.set(
-      DRIVE_LANE_X,
+      roadX(this.state.distance),
       Math.sin(this.time * 17) *
         Math.min(0.009, Math.abs(this.state.speed) * 0.001),
       -this.state.distance,
     );
+    this.car.rotation.y = roadHeading(this.state.distance);
     for (const wheel of this.wheels)
       wheel.rotation.x -=
         (this.state.distance - before) / (0.43 * this.car.scale.y);
     const distance = this.state.distance;
-    this.camera.position.set(DRIVE_LANE_X + 5, 2.4, 7.6 - distance);
-    this.camera.lookAt(DRIVE_LANE_X + 0.7, 2.15, -8 - distance);
-    this.sun.position.set(55, 70, -75 - distance);
-    this.sun.target.position.set(0, 0, -35 - distance);
+    this.camera.position.set(roadX(distance - 8.4) + 5.1, 2.65, 8.4 - distance);
+    this.camera.lookAt(roadX(distance + 14) + 0.15, 2.12, -14 - distance);
+    this.sun.position.set(roadX(distance) + 46, 59, -68 - distance);
+    this.sun.target.position.set(roadX(distance), 0, -22 - distance);
     this.markers.forEach((marker, i) => {
       marker.visible = this.state.arrived !== i;
       const diamond = marker.children.find((o) =>

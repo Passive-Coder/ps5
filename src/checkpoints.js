@@ -1,4 +1,17 @@
 export const DRIVE_LANE_X = 4.8;
+// Shared by the baked street and the driving camera so the reference's bend
+// stays aligned with the car and every checkpoint.
+export function roadOffset(distance) {
+  const d = Math.max(0, distance);
+  return 22 * (1 - Math.exp(-((d / 90) ** 2)));
+}
+export function roadX(distance) {
+  return DRIVE_LANE_X + roadOffset(distance);
+}
+export function roadHeading(distance) {
+  const d = Math.max(0, distance);
+  return -Math.atan(((44 * d) / 8100) * Math.exp(-((d / 90) ** 2)));
+}
 export const AOIS = ["App", "Web", "FOSS", "DevOps"];
 export const CHECKPOINT_DISTANCES = [22, 76, 130, 184];
 

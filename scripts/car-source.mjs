@@ -19,7 +19,7 @@ const gold = material("wheel-alloy", 0xa69b79, 0.27, 0.85);
 const metal = material("car-machined-metal", 0x6e7b7b, 0.24, 0.85);
 const red = material("tail-light", 0xc71721, 0.2, 0.22);
 const led = material("car-headlight", 0xd9edee, 0.18, 0.3);
-const yellow = material("car-gold-trim", 0xb1a86d, 0.3, 0.7);
+const yellow = material("car-gold-trim", 0xa58739, 0.3, 0.68);
 
 function surface(parent, name, fn, uCount, vCount, mat, flip = true) {
   const p = [],
@@ -106,7 +106,7 @@ function canopy(x, t) {
   return [
     x * width,
     bodyTop(x * 0.73, z) +
-      0.27 * dome * Math.pow(Math.max(0, 1 - x * x), 0.38) +
+      0.36 * dome * Math.pow(Math.max(0, 1 - x * x), 0.46) +
       0.015,
     z,
   ];
@@ -196,22 +196,45 @@ export function buildCar(parent) {
     28,
     black,
   );
-  for (let i = 0; i < 12; i++) {
-    const z = 0.85 + i * 0.079;
-    const w = 0.61 - 0.06 * Math.sin((i / 11) * Math.PI);
-    curve(
+  // Two banks of deep engine vents flank the central rear glass.
+  for (const side of [-1, 1]) {
+    for (let i = 0; i < 8; i++) {
+      const z = 0.8 + i * 0.135;
+      const vent = box(
+        car,
+        "engine-vent-blade",
+        [0.32, 0.018, 0.06],
+        [side * 0.48, 1.061, z],
+        paint,
+        0.009,
+      );
+      vent.rotation.y = side * -0.17;
+      vent.rotation.x = -0.25;
+    }
+    surface(
       car,
-      "engine-louvre",
-      [
-        [-w, 1.047, z],
-        [-0.3, 1.06, z],
-        [0.3, 1.06, z],
-        [w, 1.047, z],
-      ],
-      0.012,
-      metal,
+      "flying-rear-buttress",
+      (u, v) => {
+        const z = 0.41 + v * 1.57;
+        const x = side * (0.71 + v * 0.2 + u * 0.14);
+        const height = (1 - v) ** 1.6 * 0.12;
+        return [x, bodyTop(x / section(z)[0], z) + height + 0.018, z];
+      },
+      16,
+      40,
+      paint,
+      side > 0,
     );
   }
+  box(car, "engine-spine", [0.085, 0.026, 1.1], [0, 1.064, 1.32], navy, 0.012);
+  box(
+    car,
+    "engine-accent",
+    [0.012, 0.012, 0.68],
+    [0, 1.083, 1.2],
+    yellow,
+    0.004,
+  );
   for (const side of [-1, 1]) {
     curve(
       car,
@@ -352,13 +375,24 @@ export function buildCar(parent) {
   for (const side of [-1, 1]) {
     curve(
       car,
+      "tail-lamp-recess",
+      [
+        [side * 0.4, 0.795, rearZ(0.4 / 0.91) + 0.027],
+        [side * 0.63, 0.815, rearZ(0.63 / 0.91) + 0.027],
+        [side * 0.88, 0.84, rearZ(0.88 / 0.91) + 0.027],
+        [side * 1.01, 0.85, 2.21],
+      ],
+      0.044,
+      black,
+    );
+    curve(
+      car,
       "sculpted-tail-light",
       [
-        [side * 0.2, 0.765, rearZ(0.2 / 0.91) + 0.025],
-        [side * 0.48, 0.78, rearZ(0.48 / 0.91) + 0.025],
-        [side * 0.72, 0.81, rearZ(0.72 / 0.91) + 0.025],
-        [side * 0.9, 0.84, rearZ(0.9 / 0.91) + 0.015],
-        [side * 1.0, 0.88, 2.22],
+        [side * 0.4, 0.82, rearZ(0.4 / 0.91) + 0.071],
+        [side * 0.64, 0.842, rearZ(0.64 / 0.91) + 0.071],
+        [side * 0.86, 0.86, rearZ(0.86 / 0.91) + 0.063],
+        [side * 0.98, 0.856, 2.26],
       ],
       0.017,
       red,
@@ -367,12 +401,25 @@ export function buildCar(parent) {
       car,
       "tail-light-return",
       [
-        [side * 0.6, 0.78, rearZ(0.6 / 0.91) + 0.028],
-        [side * 0.71, 0.757, rearZ(0.71 / 0.91) + 0.028],
-        [side * 0.84, 0.79, rearZ(0.84 / 0.91) + 0.025],
+        [side * 0.47, 0.79, rearZ(0.47 / 0.91) + 0.067],
+        [side * 0.62, 0.766, rearZ(0.62 / 0.91) + 0.067],
+        [side * 0.83, 0.8, rearZ(0.83 / 0.91) + 0.063],
       ],
       0.01,
       red,
+    );
+    surface(
+      car,
+      "bronze-rear-inset",
+      (u, v) => {
+        const x = side * (0.48 + u * 0.47);
+        const y = 0.4 + v * (0.12 + u * 0.11);
+        return [x, y, rearZ(x / 0.94) + 0.035];
+      },
+      24,
+      12,
+      yellow,
+      side < 0,
     );
     curve(
       car,
@@ -397,16 +444,6 @@ export function buildCar(parent) {
     );
     pipe.rotation.x = Math.PI / 2;
   }
-  curve(
-    car,
-    "rear-gold-belt",
-    Array.from({ length: 11 }, (_, i) => {
-      const x = ((i / 10) * 2 - 1) * 0.92;
-      return [x, 0.52, rearZ(x / 0.94) + 0.025];
-    }),
-    0.016,
-    yellow,
-  );
   for (let i = -2; i <= 2; i++)
     box(
       car,

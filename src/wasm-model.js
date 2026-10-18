@@ -10,11 +10,11 @@ export async function loadWasmModel(url) {
   const bytes = memory.buffer.slice(model_ptr(), model_ptr() + model_size());
   const decoder = new DRACOLoader().setDecoderPath("/draco/").setWorkerLimit(2);
   try {
-    return (
-      await new GLTFLoader()
-        .setDRACOLoader(decoder)
-        .parseAsync(bytes, "/assets/")
-    ).scene;
+    const gltf = await new GLTFLoader()
+      .setDRACOLoader(decoder)
+      .parseAsync(bytes, "/assets/");
+    gltf.scene.userData.animationClips = gltf.animations;
+    return gltf.scene;
   } finally {
     decoder.dispose();
   }

@@ -44,6 +44,23 @@ export async function loadCityMaterials(renderer) {
     img.onerror = reject;
     img.src = "/assets/cyberpunk.png";
   });
+  const loadImage = (src) =>
+    new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = src;
+    });
+  [assets.facades, assets.street, assets.district] = await Promise.all([
+    loader.loadAsync("/assets/textures/district-facades.png"),
+    loadImage("/assets/street-reference.png"),
+    loadImage("/assets/district-reference.png"),
+  ]);
+  assets.facades.colorSpace = T.SRGBColorSpace;
+  assets.facades.anisotropy = Math.min(
+    8,
+    renderer.capabilities.getMaxAnisotropy(),
+  );
   return assets;
 }
 function windowTexture(index) {
@@ -73,7 +90,30 @@ function windowTexture(index) {
       c.fillRect((i * 79) % w, (i * 191) % h, 1, 13 + (i % 30));
   });
 }
-function poster(name, art) {
+function poster(name, assets) {
+  const art = assets.art;
+  // Only billboard artwork is sampled from the reference. The street, people
+  // and vehicles remain independently rendered geometry.
+  if (name.includes("kiosk"))
+    return canvasTexture(256, 400, (c, w, h) =>
+      c.drawImage(assets.street, 619, 226, 47, 63, 0, 0, w, h),
+    );
+  if (name.includes("right-poster"))
+    return canvasTexture(384, 640, (c, w, h) =>
+      c.drawImage(assets.street, 606, 1, 47, 78, 0, 0, w, h),
+    );
+  if (name.includes("militech"))
+    return canvasTexture(512, 256, (c, w, h) =>
+      c.drawImage(assets.street, 212, 132, 36, 19, 0, 0, w, h),
+    );
+  if (name === "sign-hero-0")
+    return canvasTexture(384, 512, (c, w, h) =>
+      c.drawImage(assets.street, 251, 116, 44, 65, 0, 0, w, h),
+    );
+  if (name === "sign-hero-1")
+    return canvasTexture(384, 512, (c, w, h) =>
+      c.drawImage(assets.district, 136, 69, 72, 86, 0, 0, w, h),
+    );
   const vertical = name.includes("vertical") || name.includes("poster");
   return canvasTexture(768, vertical ? 1536 : 512, (c, w, h) => {
     const id = Number(name.match(/\d+/)?.[0] || 0);
@@ -191,9 +231,9 @@ export function decorateCity(root, assets) {
       seen.add(m);
       if (m.name === "asphalt" || m.name === "asphalt-patch") {
         Object.assign(m, assets.asphalt_02);
-        m.color.set(m.name === "asphalt" ? 0x929589 : 0x6b716c);
+        m.color.set(m.name === "asphalt" ? 0xb8b3a2 : 0x888b80);
         m.roughness = 0.84;
-        m.normalScale = new T.Vector2(0.42, 0.42);
+        m.normalScale = new T.Vector2(0.19, 0.19);
       } else if (m.name.startsWith("concrete-")) {
         Object.assign(m, assets.concrete_layers_02);
         m.normalScale = new T.Vector2(0.38, 0.38);
@@ -201,9 +241,33 @@ export function decorateCity(root, assets) {
         m.color.lerp(new T.Color(0xdfdfd2), 0.45);
       } else if (m.name === "pavement") {
         Object.assign(m, assets.concrete_floor_02);
-        m.color.set(0xb3bec4);
+        m.color.set(0xd1cdc0);
         m.roughness = 0.86;
-        m.normalScale = new T.Vector2(0.22, 0.22);
+        m.normalScale = new T.Vector2(0.07, 0.07);
+      } else if (m.name.startsWith("reference-facade-")) {
+        const index = Number(m.name.slice(-1));
+        const source = assets.facades.image;
+        const half = source.width / 2;
+        m.map = canvasTexture(1024, 1024, (c, w, h) =>
+          c.drawImage(
+            source,
+            (index % 2) * half,
+            index < 2 ? 0 : half,
+            half,
+            half,
+            0,
+            0,
+            w,
+            h,
+          ),
+        );
+        m.map.anisotropy = assets.facades.anisotropy;
+        m.map.wrapS = m.map.wrapT = T.RepeatWrapping;
+        if (index === 2) m.map.repeat.set(4, 4);
+        else if (index === 1 || index === 3) m.map.repeat.set(1, 2);
+        m.color.set(0xffffff);
+        m.roughness = 0.78;
+        m.metalness = 0.12;
       } else if (m.name.startsWith("cladding") || m.name === "painted-steel") {
         m.map = metalWear;
         m.roughness = 0.65;
@@ -257,7 +321,7 @@ export function decorateCity(root, assets) {
       }
     }
     if (o.name.startsWith("sign-")) {
-      const map = poster(o.name, assets.art);
+      const map = poster(o.name, assets);
       o.material = new T.MeshStandardMaterial({
         map,
         emissiveMap: map,
