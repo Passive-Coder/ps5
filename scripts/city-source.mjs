@@ -84,12 +84,12 @@ function palm(parent, x, z, height = 8) {
   }
   for (let i = 0; i < 19; i++) {
     const angle = i * 2.39996,
-      length = 3.3 + random() * 1.1;
+      length = 2.7 + random() * 0.9;
     const points = [];
     const point = (t) =>
       new T.Vector3(
         x + 0.6 + Math.cos(angle) * length * t,
-        height + Math.sin(t * Math.PI) * 1.1 - t * t * 1.45 + (i % 3) * 0.17,
+        height + Math.sin(t * Math.PI) * 1.9 - t * t * 1.1 + (i % 3) * 0.17,
         z + Math.sin(angle) * length * t,
       );
     for (let j = 0; j <= 18; j++) points.push(point(j / 18));
@@ -621,27 +621,44 @@ function industrialStack(
   return g;
 }
 function referenceArchitecture(parent) {
-  industrialStack(parent, "industrial-foreground", -49, -31, 30, 52, 62);
+  industrialStack(parent, "industrial-foreground", -65, -68, 64, 50, 70);
   industrialStack(parent, "brutalist-superframe", -39, -96, 28, 34, 120);
   industrialStack(parent, "pale-skyline-crown", -24, -162, 24, 30, 137, true);
 }
 function bendDistrict(root) {
   root.updateMatrixWorld(true);
   const point = new T.Vector3();
-  root.traverse((o) => {
-    if (!o.isMesh) return;
-    for (let p = o; p; p = p.parent)
-      if (p.name === "player-car" || p.name === "checkpoints") return;
-    const inverse = o.matrixWorld.clone().invert();
-    const positions = o.geometry.attributes.position;
-    for (let i = 0; i < positions.count; i++) {
-      point.fromBufferAttribute(positions, i).applyMatrix4(o.matrixWorld);
-      point.x += roadOffset(-point.z);
-      point.applyMatrix4(inverse);
-      positions.setXYZ(i, point.x, point.y, point.z);
+  const center = new T.Vector3();
+  // Buildings remain rigid. Warping their sparsely tessellated cores made the
+  // walls cut through the denser facade meshes and hide the recessed detail.
+  for (const child of root.children) {
+    if (child.name === "player-car" || child.name === "checkpoints") continue;
+    if (
+      ![
+        "street",
+        "construction-safety-barriers",
+        "fenced-utility-yard",
+      ].includes(child.name)
+    ) {
+      new T.Box3().setFromObject(child).getCenter(center);
+      // Left-side industrial blocks follow the reference's fixed city grid;
+      // only the right-side frontage steps outward with the turning road.
+      if (center.x > 0) child.position.x += roadOffset(-center.z);
+      continue;
     }
-    o.geometry.computeVertexNormals();
-  });
+    child.traverse((o) => {
+      if (!o.isMesh) return;
+      const inverse = o.matrixWorld.clone().invert();
+      const positions = o.geometry.attributes.position;
+      for (let i = 0; i < positions.count; i++) {
+        point.fromBufferAttribute(positions, i).applyMatrix4(o.matrixWorld);
+        point.x += roadOffset(-point.z);
+        point.applyMatrix4(inverse);
+        positions.setXYZ(i, point.x, point.y, point.z);
+      }
+      o.geometry.computeVertexNormals();
+    });
+  }
 }
 function roundTower(parent, x, z, r, h) {
   const g = group(parent, "rounded-corporate-tower");
@@ -826,6 +843,13 @@ export function createCity(car) {
   const root = new T.Group();
   root.name = "night-city";
   const street = group(root, "street");
+  box(
+    street,
+    "district-ground",
+    [400, 0.2, 800],
+    [0, -0.36, -150],
+    material("asphalt", 0x73736a, 0.96),
+  );
   mesh(
     street,
     "asphalt",
@@ -955,16 +979,16 @@ export function createCity(car) {
   box(
     street,
     "foreground-drain-bed",
-    [0.85, 0.025, 4.4],
+    [0.85, 0.025, 2],
     [9.55, 0.278, -0.6],
     dark,
   );
-  for (let i = 0; i < 30; i++)
+  for (let i = 0; i < 15; i++)
     box(
       street,
       "foreground-drain-grate",
       [0.8, 0.028, 0.027],
-      [9.55, 0.3, 1.5 - i * 0.14],
+      [9.55, 0.3, 0.3 - i * 0.13],
       steel,
     );
   const roadPanel = mesh(
@@ -1092,6 +1116,7 @@ export function createCity(car) {
     );
   }
   bake(storefront);
+  storefront.position.x = 8;
   referenceArchitecture(root);
   roundTower(root, -45, -80, 12, 87);
   sign(root, "hero-0", 5.4, 7.2, -15.9, 12.8, -46, 0.25);

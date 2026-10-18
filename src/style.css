@@ -295,22 +295,9 @@ button:focus-visible {
   justify-content: space-between;
 }
 .cyberpunk-wordmark {
-  font:
-    italic 900 50px Arial,
-    sans-serif;
-  color: #edf22d;
-  transform: skew(-15deg, -4deg);
-  text-shadow: 2px 2px #103d3c;
-  letter-spacing: -3px;
-}
-.cyberpunk-wordmark span {
   display: block;
-  font:
-    11px "Courier New",
-    monospace;
-  letter-spacing: 6px;
-  text-align: center;
-  margin-top: 5px;
+  width: 380px;
+  height: 127.5px;
 }
 #return-home {
   padding: 13px 19px;

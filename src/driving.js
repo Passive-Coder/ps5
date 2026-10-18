@@ -85,9 +85,9 @@ export class DrivingGame {
     this.scene.add(root);
     this.scene.background = canvasTexture(4, 512, (c, w, h) => {
       const g = c.createLinearGradient(0, 0, 0, h);
-      g.addColorStop(0, "#aebbc0");
-      g.addColorStop(0.6, "#deddd2");
-      g.addColorStop(1, "#f0e8d6");
+      g.addColorStop(0, "#c8cec8");
+      g.addColorStop(0.6, "#e0dfd0");
+      g.addColorStop(1, "#fff0da");
       c.fillStyle = g;
       c.fillRect(0, 0, w, h);
     });
@@ -149,6 +149,18 @@ export class DrivingGame {
     this.sampleScene.add(this.sampleQuad);
     this.colors = Array.from({ length: 12 }, () => new T.Color());
     decorateCity(root, assets);
+    const logo = document.querySelector(".cyberpunk-wordmark");
+    const logoContext = logo.getContext("2d");
+    logoContext.drawImage(assets.street, 10, 16, 146, 49, 0, 0, 584, 196);
+    const logoPixels = logoContext.getImageData(0, 0, 584, 196);
+    for (let k = 0; k < logoPixels.data.length; k += 4) {
+      const [r, g, b] = logoPixels.data.subarray(k, k + 3);
+      const yellow = Math.min(r, g) - b;
+      logoPixels.data[k + 3] *=
+        Math.max(0, Math.min(1, (yellow - 24) / 22)) *
+        Math.max(0, Math.min(1, (Math.min(r, g) - 85) / 35));
+    }
+    logoContext.putImageData(logoPixels, 0, 0);
     this.people = [];
     const height = new T.Box3()
       .setFromObject(pedestrian)
@@ -161,10 +173,40 @@ export class DrivingGame {
         o.castShadow = o.receiveShadow = true;
         o.material = o.material.clone();
         o.material.roughness = 0.88;
+        o.material.metalness = 0;
         if (o.material.name.endsWith("_body"))
           o.material.color.set(
             i === 0 ? 0xffffff : [0xb4b9b5, 0x929e9d, 0xa29b87][i % 3],
           );
+        if (i === 0 && o.material.name.endsWith("_body") && o.material.map) {
+          const original = o.material.map;
+          const map = canvasTexture(512, 512, (c, w, h) => {
+            c.drawImage(original.image, 0, 0, w, h);
+            const pixels = c.getImageData(0, 0, w, h);
+            for (let y = 0; y < 425; y++)
+              for (let x = 0; x < w; x++) {
+                const k = (y * w + x) * 4;
+                const r = pixels.data[k],
+                  g = pixels.data[k + 1],
+                  b = pixels.data[k + 2];
+                const light = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+                if (y < 188) {
+                  pixels.data[k] = light * 74;
+                  pixels.data[k + 1] = light * 77;
+                  pixels.data[k + 2] = light * 73;
+                } else {
+                  const shirt = b > r * 1.2 && b > g * 0.9;
+                  const shade = shirt ? 0.55 + light * 0.5 : 0.25 + light * 0.8;
+                  const color = shirt ? [158, 143, 118] : [139, 108, 75];
+                  for (let j = 0; j < 3; j++)
+                    pixels.data[k + j] = color[j] * shade;
+                }
+              }
+            c.putImageData(pixels, 0, 0);
+          });
+          map.flipY = original.flipY;
+          o.material.map = map;
+        }
       });
       this.scene.add(person);
       const joints = {};
@@ -184,7 +226,7 @@ export class DrivingGame {
         root: person,
         joints,
         phase: i * 1.3,
-        x: i === 0 ? 10.65 : 11.2 + (i % 3) * 1.1,
+        x: i === 0 ? 11.1 : 11.2 + (i % 3) * 1.1,
         z: i === 0 ? 1 : -8 - i * 13,
         direction: i === 0 || i % 4 === 3 ? -1 : 1,
       });
