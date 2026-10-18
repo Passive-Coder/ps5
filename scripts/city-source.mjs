@@ -61,7 +61,7 @@ function palm(parent, x, z, height = 8) {
   rod(parent, [x, 0, z], [x + 0.4, height, z], 0.14, trunk);
   for (let i = 0; i < 14; i++) {
     const angle = (i * Math.PI * 2) / 14,
-      length = 2.0 + random() * 1.3;
+      length = 3.2 + random() * 1.4;
     const positions = [],
       indices = [];
     for (let j = 0; j <= 10; j++) {
@@ -648,7 +648,42 @@ function van(parent, x, z, color = 0x8b8c80, id = 0) {
   const g = group(parent, `traffic-${id}`);
   g.position.set(x, 0, z);
   const paint = material(`traffic-paint-${id}`, color, 0.66, 0.22);
-  box(g, "van-body", [2.12, 1.82, 4.5], [0, 1.29, 0], paint, 0.2);
+  box(g, "van-body", [2.12, 1.3, 4.5], [0, 1.55, 0], paint, 0.16);
+  // Open wheel arches expose the tyres instead of covering them with a solid box.
+  for (const side of [-1, 1]) {
+    const positions = [],
+      indices = [],
+      uv = [];
+    for (let i = 0; i <= 120; i++) {
+      const z = -2.25 + (i / 120) * 4.5;
+      let low = 0.35;
+      for (const axle of [-1.38, 1.4])
+        if (Math.abs(z - axle) < 0.46)
+          low = Math.max(low, 0.4 + Math.sqrt(0.46 ** 2 - (z - axle) ** 2));
+      positions.push(side * 1.06, low, z, side * 1.06, 0.95, z);
+      uv.push(i / 120, 0, i / 120, 1);
+      if (i < 120) {
+        const n = i * 2,
+          quad = [n, n + 1, n + 2, n + 1, n + 3, n + 2];
+        indices.push(...(side < 0 ? quad.reverse() : quad));
+      }
+    }
+    const shell = new T.BufferGeometry();
+    shell.setAttribute("position", new T.Float32BufferAttribute(positions, 3));
+    shell.setAttribute("uv", new T.Float32BufferAttribute(uv, 2));
+    shell.setIndex(indices);
+    shell.computeVertexNormals();
+    mesh(g, "van-lower-side", shell, paint);
+  }
+  for (const end of [-1, 1])
+    box(
+      g,
+      "van-lower-end",
+      [2.06, 0.55, 0.15],
+      [0, 0.65, end * 2.16],
+      paint,
+      0.05,
+    );
   box(g, "van-roof", [2.03, 0.13, 3.9], [0, 2.22, 0.15], paint, 0.08);
   box(g, "bumper", [2.14, 0.26, 0.2], [0, 0.56, 2.26], dark, 0.04);
   for (const side of [-1, 1]) {
@@ -663,8 +698,8 @@ function van(parent, x, z, color = 0x8b8c80, id = 0) {
     box(
       g,
       "brake-light",
-      [0.12, 0.35, 0.04],
-      [side * 0.98, 1.04, 2.27],
+      [0.86, 0.045, 0.04],
+      [side * 0.51, 1.08, 2.27],
       red,
       0.015,
     );
@@ -758,27 +793,27 @@ export function createCity() {
   const root = new T.Group();
   root.name = "night-city";
   const street = group(root, "street");
-  box(
+  mesh(
     street,
     "asphalt",
-    [23, 0.2, 410],
-    [-2, -0.12, -150],
+    new T.BoxGeometry(24.5, 0.2, 410, 1, 1, 205),
     material("asphalt", 0x595b57, 0.96),
+    [-2.25, -0.12, -150],
   );
   for (const x of [-17.6, 12]) {
-    box(
+    mesh(
       street,
       "sidewalk",
-      [7, 0.32, 410],
-      [x, 0.1, -150],
+      new T.BoxGeometry(15, 0.32, 410, 1, 1, 205),
       material("pavement", 0xa49d8b, 0.96),
+      [x < 0 ? -21.6 : 16, 0.1, -150],
     );
-    box(
+    mesh(
       street,
       "curb",
-      [0.25, 0.37, 410],
-      [x < 0 ? -14 : 8.45, 0.12, -150],
+      new T.BoxGeometry(0.25, 0.37, 410, 1, 1, 205),
       concrete[2],
+      [x < 0 ? -14 : 8.45, 0.12, -150],
     );
   }
   for (let z = 35; z > -350; z -= 5.4) {
@@ -821,7 +856,7 @@ export function createCity() {
       }
     }
   }
-  for (const crossing of [-31, -111, -205, -290]) {
+  for (const crossing of [-82, -160, -250, -320]) {
     for (let x = -13; x < 8; x += 0.8)
       box(street, "crosswalk", [0.43, 0.015, 3.8], [x, 0.009, crossing], white);
     box(
@@ -835,6 +870,7 @@ export function createCity() {
   // Fence, urban furniture, lamp poles and overhead utilities give the street its scale.
   for (let z = 0; z > -330; z -= 15) {
     for (const x of [-16.5, 11.1]) {
+      if (x > 0 && z === 0) continue;
       rod(street, [x, 0.3, z], [x, 7.5, z], 0.075, steel);
       rod(street, [x, 7.5, z], [x + (x < 0 ? 2 : -2), 7.9, z], 0.075, steel);
       box(
@@ -846,8 +882,9 @@ export function createCity() {
         0.05,
       );
     }
-    if (z % 30 === 0) palm(street, 13.7, z - 6, 7.8 + random() * 2);
-    box(street, "utility-box", [0.65, 1.1, 0.52], [14, 0.8, z], steel, 0.04);
+    if (z % 30 === 0 && z < -15) palm(street, 13.7, z - 6, 7.8 + random() * 2);
+    if (z < -15)
+      box(street, "utility-box", [0.65, 1.1, 0.52], [14, 0.8, z], steel, 0.04);
     box(street, "bollard", [0.16, 0.8, 0.16], [9.2, 0.65, z], yellow, 0.02);
     // Animated pedestrian meshes are loaded from their own WASM asset.
   }
@@ -921,7 +958,7 @@ export function createCity() {
     [DRIVE_LANE_X, 0.005, -14],
   );
   roadPanel.rotation.x = -Math.PI / 2;
-  palm(street, -13.4, -62, 20);
+  palm(street, -13.4, -48, 16);
   palm(street, -13.4, -110, 13);
   // Chain-link fencing on the left, behind the roadside safety rail.
   for (let z = 5; z > -120; z -= 3) {
@@ -1110,7 +1147,7 @@ export function createCity() {
   sign(root, "kiosk", 1.5, 2.7, 14.5, 1.75, -4.5);
   sign(root, "right-poster", 4.5, 7, 16, 13, -7, -0.25);
   buildCar(root);
-  van(root, DRIVE_LANE_X - 3.7, -1.5, 0x929185, 0);
+  van(root, DRIVE_LANE_X - 5.4, -3.3, 0x929185, 0);
   van(root, -5.8, -25, 0x747c70, 1);
   van(root, DRIVE_LANE_X - 3.1, -44, 0x526c5f, 2).scale.set(1.3, 1.5, 1.3);
   van(root, 1.4, -83, 0x707b77, 3);

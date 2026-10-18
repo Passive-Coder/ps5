@@ -118,15 +118,19 @@ export function buildCar(parent) {
   const car = group(parent, "player-car");
   // Smooth shoulder surfaces and cut wheel wells are built as actual shell geometry.
   for (const [start, end, mat] of [
-    [-2.52, -0.82, pearl],
-    [-0.82, 2.53, paint],
+    [-2.52, 0.05, pearl],
+    [0.05, 2.53, paint],
   ]) {
     surface(
       car,
       "sculpted-upper-shell",
       (u, v) => {
-        const z = start + (end - start) * v,
-          x = u * 2 - 1;
+        const x = u * 2 - 1;
+        const split = 0.05 - 0.55 * (1 - Math.abs(x)) ** 2;
+        const z =
+          mat === pearl
+            ? -2.52 + (split + 2.52) * v
+            : split + (2.53 - split) * v;
         return [x * section(z)[0], bodyTop(x, z), rearZ(x, z)];
       },
       60,
@@ -138,7 +142,11 @@ export function buildCar(parent) {
         car,
         "sculpted-side-shell",
         (u, v) => {
-          const z = start + (end - start) * u,
+          const split = 0.62 - v * 0.57;
+          const z =
+              mat === pearl
+                ? -2.52 + (split + 2.52) * u
+                : split + (2.53 - split) * u,
             [w] = section(z),
             arch = Math.max(
               ...[-1.61, 1.55].map((a) =>
@@ -572,6 +580,6 @@ export function buildCar(parent) {
       hub.rotation.z = Math.PI / 2;
       bake(wheel);
     }
-  car.scale.setScalar(0.9);
+  car.scale.setScalar(0.96);
   return car;
 }

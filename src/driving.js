@@ -17,6 +17,49 @@ import {
   DriveState,
 } from "./checkpoints.js";
 
+const jointFrom = new T.Vector3(),
+  jointTo = new T.Vector3(),
+  jointDirection = new T.Vector3();
+const parentInverse = new T.Quaternion(),
+  jointWorld = new T.Quaternion();
+const rootWorld = new T.Quaternion(),
+  jointCorrection = new T.Quaternion();
+function aimJoint(person, name, x, y, z) {
+  const [bone, child] = person.joints[name];
+  if (!bone || !child) return;
+  bone.getWorldPosition(jointFrom);
+  child.getWorldPosition(jointTo).sub(jointFrom).normalize();
+  person.root.getWorldQuaternion(rootWorld);
+  jointDirection.set(x, y, z).normalize().applyQuaternion(rootWorld);
+  jointCorrection.setFromUnitVectors(jointTo, jointDirection);
+  bone.getWorldQuaternion(jointWorld);
+  bone.parent.getWorldQuaternion(parentInverse).invert();
+  bone.quaternion.copy(
+    parentInverse.multiply(jointCorrection).multiply(jointWorld),
+  );
+  bone.updateWorldMatrix(false, true);
+}
+function posePedestrian(person, time) {
+  const stride = Math.sin(time * 3.4 + person.phase) * 0.24;
+  for (const [side, direction] of [
+    ["Left", 1],
+    ["Right", -1],
+  ]) {
+    const step = stride * direction;
+    aimJoint(person, `${side}Arm`, direction * 0.13, -1, -step * 0.8);
+    aimJoint(person, `${side}ForeArm`, direction * 0.02, -1, 0.11 - step * 0.3);
+    aimJoint(person, `${side}UpLeg`, direction * 0.035, -1, step);
+    aimJoint(
+      person,
+      `${side}Leg`,
+      direction * 0.015,
+      -1,
+      0.04 - Math.max(0, step) * 1.5,
+    );
+    aimJoint(person, `${side}Foot`, 0, -0.07, 1);
+  }
+}
+
 export class DrivingGame {
   static async create(renderer, environment, onState) {
     const [root, assets, pedestrian] = await Promise.all([
@@ -68,6 +111,8 @@ export class DrivingGame {
     this.sun.shadow.radius = 2;
     this.sun.shadow.bias = -0.0003;
     this.scene.add(this.sun, this.sun.target);
+    this.bounce = new T.DirectionalLight(0xdce2d7, 0.65);
+    this.scene.add(this.bounce, this.bounce.target);
     this.camera = new T.PerspectiveCamera(54, 16 / 9, 0.08, 650);
     this.target = new T.WebGLRenderTarget(1536, 864, {
       type: T.HalfFloatType,
@@ -107,9 +152,6 @@ export class DrivingGame {
     const height = new T.Box3()
       .setFromObject(pedestrian)
       .getSize(new T.Vector3()).y;
-    const walk = pedestrian.userData.animationClips.find(
-      (clip) => clip.name === "Walk",
-    );
     for (let i = 0; i < 14; i++) {
       const person = cloneSkeleton(pedestrian);
       person.scale.multiplyScalar((1.78 + (i % 3) * 0.04) / height);
@@ -118,18 +160,29 @@ export class DrivingGame {
         o.castShadow = o.receiveShadow = true;
         o.material = o.material.clone();
         o.material.roughness = 0.88;
-        if (o.material.name === "VanguardBodyMat")
+        if (o.material.name.endsWith("_body"))
           o.material.color.set(
-            i === 0 ? 0xb7a189 : [0x9aa5a0, 0x8c9694, 0x8c8a76][i % 3],
+            i === 0 ? 0xffffff : [0xb4b9b5, 0x929e9d, 0xa29b87][i % 3],
           );
       });
-      const mixer = new T.AnimationMixer(person);
-      if (walk) mixer.clipAction(walk).play();
-      mixer.setTime(0.33 + i * 0.21);
       this.scene.add(person);
+      const joints = {};
+      for (const side of ["Left", "Right"])
+        for (const [bone, child] of [
+          ["Arm", "ForeArm"],
+          ["ForeArm", "Hand"],
+          ["UpLeg", "Leg"],
+          ["Leg", "Foot"],
+          ["Foot", "ToeBase"],
+        ])
+          joints[`${side}${bone}`] = [
+            person.getObjectByName(`${side}${bone}`),
+            person.getObjectByName(`${side}${child}`),
+          ];
       this.people.push({
         root: person,
-        mixer,
+        joints,
+        phase: i * 1.3,
         x: i === 0 ? 10.65 : 11.2 + (i % 3) * 1.1,
         z: i === 0 ? 1 : -8 - i * 13,
         direction: i % 4 === 3 ? -1 : 1,
@@ -160,7 +213,7 @@ export class DrivingGame {
     this.markers.forEach((m) => (m.visible = true));
     const paint = new T.MeshPhysicalMaterial({
       color: 0x147e8a,
-      metalness: 0.66,
+      metalness: 0.46,
       roughness: 0.19,
       clearcoat: 1,
       clearcoatRoughness: 0.07,
@@ -197,11 +250,14 @@ export class DrivingGame {
     const before = this.state.distance;
     this.state.update(delta);
     for (const person of this.people) {
-      person.mixer.update(delta * 0.72);
-      const d = -person.z + this.time * 0.46 * person.direction;
+      const d = -person.z + this.time * 0.08 * person.direction;
       person.root.position.set(person.x + roadX(d) - DRIVE_LANE_X, 0.26, -d);
       person.root.rotation.y =
         (person.direction > 0 ? Math.PI : 0) + roadHeading(d);
+      posePedestrian(person, this.time);
+      const leftToe = person.joints.LeftFoot[1].getWorldPosition(jointFrom).y;
+      const rightToe = person.joints.RightFoot[1].getWorldPosition(jointTo).y;
+      person.root.position.y += 0.3 - Math.min(leftToe, rightToe);
     }
     this.car.position.set(
       roadX(this.state.distance),
@@ -215,9 +271,11 @@ export class DrivingGame {
         (this.state.distance - before) / (0.43 * this.car.scale.y);
     const distance = this.state.distance;
     this.camera.position.set(roadX(distance - 8.4) + 5.1, 2.65, 8.4 - distance);
-    this.camera.lookAt(roadX(distance + 14) + 0.15, 2.12, -14 - distance);
+    this.camera.lookAt(roadX(distance + 14) - 1.35, 2.12, -14 - distance);
     this.sun.position.set(roadX(distance) + 46, 59, -68 - distance);
     this.sun.target.position.set(roadX(distance), 0, -22 - distance);
+    this.bounce.position.set(roadX(distance) - 12, 8, 12 - distance);
+    this.bounce.target.position.set(roadX(distance), 1, -distance);
     this.markers.forEach((marker, i) => {
       marker.visible = this.state.arrived !== i;
       const diamond = marker.children.find((o) =>

@@ -234,6 +234,8 @@ export function decorateCity(root, assets) {
         m.color.set(m.name === "asphalt" ? 0xb8b3a2 : 0x888b80);
         m.roughness = 0.84;
         m.normalScale = new T.Vector2(0.19, 0.19);
+        for (const texture of [m.map, m.normalMap, m.roughnessMap])
+          texture.repeat.set(2, 2);
       } else if (m.name.startsWith("concrete-")) {
         Object.assign(m, assets.concrete_layers_02);
         m.normalScale = new T.Vector2(0.38, 0.38);
@@ -265,7 +267,7 @@ export function decorateCity(root, assets) {
         m.map.wrapS = m.map.wrapT = T.RepeatWrapping;
         if (index === 2) m.map.repeat.set(4, 4);
         else if (index === 1 || index === 3) m.map.repeat.set(1, 2);
-        m.color.set(0xffffff);
+        m.color.set(index === 0 ? 0xa9b8b1 : 0xffffff);
         m.roughness = 0.78;
         m.metalness = 0.12;
       } else if (m.name.startsWith("cladding") || m.name === "painted-steel") {

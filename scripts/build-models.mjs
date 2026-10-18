@@ -3,6 +3,7 @@ import { Document, NodeIO } from "@gltf-transform/core";
 import {
   KHRDracoMeshCompression,
   KHRMaterialsUnlit,
+  KHRMaterialsSpecular,
 } from "@gltf-transform/extensions";
 import draco from "draco3dgltf";
 import { createRoom } from "./scene-source.mjs";
@@ -16,7 +17,11 @@ global.document = {
 };
 async function exportModel(source, filename) {
   const io = new NodeIO()
-    .registerExtensions([KHRDracoMeshCompression, KHRMaterialsUnlit])
+    .registerExtensions([
+      KHRDracoMeshCompression,
+      KHRMaterialsUnlit,
+      KHRMaterialsSpecular,
+    ])
     .registerDependencies({
       "draco3d.encoder": await draco.createEncoderModule(),
       "draco3d.decoder": await draco.createDecoderModule(),
@@ -28,6 +33,23 @@ async function exportModel(source, filename) {
       : document.createBuffer();
   const unlit = document.createExtension(KHRMaterialsUnlit);
   const scene = imported ? null : document.createScene(source.name);
+  if (imported) {
+    // Voice-avatar facial morphs are unused by this street scene.
+    for (const mesh of document.getRoot().listMeshes()) {
+      mesh.setWeights([]);
+      for (const primitive of mesh.listPrimitives())
+        for (const target of primitive.listTargets()) {
+          primitive.removeTarget(target);
+          target.dispose();
+        }
+    }
+    for (const node of document.getRoot().listNodes()) node.setWeights([]);
+    for (const accessor of document.getRoot().listAccessors())
+      if (
+        accessor.listParents().every((parent) => parent === document.getRoot())
+      )
+        accessor.dispose();
+  }
   const materialCache = new Map();
   let meshCount = 0;
   function convert(object) {
