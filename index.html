@@ -46,6 +46,79 @@
         ><button data-aoi="2" aria-pressed="false">FOSS</button
         ><button data-aoi="3" aria-pressed="false">DevOps</button>
       </nav>
+      <div id="game-loading" role="status" hidden>
+        ENTERING NIGHT CITY<span></span>
+      </div>
+      <section id="driving-ui" aria-label="3D driving controls" hidden>
+        <header class="game-header">
+          <div class="cyberpunk-wordmark">
+            Cyberpunk<span>ULTIMATE EDITION</span>
+          </div>
+          <button id="return-home">← AOIs</button>
+        </header>
+        <nav class="checkpoint-nav" aria-label="Question checkpoints">
+          <p><span id="game-aoi">App</span> <span>/ CHECKPOINTS</span></p>
+          <div class="checkpoint-buttons">
+            <button
+              data-checkpoint="0"
+              aria-pressed="false"
+              aria-label="Drive to checkpoint 1"
+            >
+              01
+            </button>
+            <button
+              data-checkpoint="1"
+              aria-pressed="false"
+              aria-label="Drive to checkpoint 2"
+            >
+              02
+            </button>
+            <button
+              data-checkpoint="2"
+              aria-pressed="false"
+              aria-label="Drive to checkpoint 3"
+            >
+              03
+            </button>
+            <button
+              data-checkpoint="3"
+              aria-pressed="false"
+              aria-label="Drive to checkpoint 4"
+            >
+              04
+            </button>
+          </div>
+          <p id="route-status">SELECT A CHECKPOINT TO DRIVE</p>
+          <div class="route-line"><span id="route-progress"></span></div>
+        </nav>
+        <div class="drive-console">
+          <div class="drive-readout">
+            <strong id="drive-speed">00 KM/H</strong
+            ><span id="drive-direction">PARKED</span>
+          </div>
+          <div class="drive-buttons">
+            <button data-drive="-1" aria-label="Hold to drive backward">
+              ↓ <span>REVERSE</span></button
+            ><button data-drive="1" aria-label="Hold to drive forward">
+              ↑ <span>FORWARD</span>
+            </button>
+          </div>
+          <p>HOLD W / S OR ↑ / ↓ TO DRIVE</p>
+        </div>
+        <section
+          id="checkpoint-question"
+          role="dialog"
+          aria-labelledby="question-number"
+          aria-describedby="question-prompt"
+          hidden
+        >
+          <p id="question-number"></p>
+          <h2 id="question-prompt"></h2>
+          <div id="question-options"></div>
+          <p id="question-feedback" role="status"></p>
+          <button id="dismiss-question">Back to driving →</button>
+        </section>
+      </section>
       <p id="scene-status" class="sr-only" role="status" aria-live="polite"></p>
       <div id="error" hidden>
         <p>The scene could not load.</p>

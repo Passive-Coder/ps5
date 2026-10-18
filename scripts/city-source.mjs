@@ -89,7 +89,7 @@ function patch(parent, name, vertices, mat) {
     "uv",
     new T.Float32BufferAttribute([0, 0, 1, 0, 1, 1, 0, 1], 2),
   );
-  g.setIndex([0, 1, 2, 0, 2, 3]);
+  g.setIndex([0, 2, 1, 0, 3, 2]);
   g.computeVertexNormals();
   return mesh(parent, name, g, mat);
 }
@@ -124,13 +124,25 @@ function bake(g) {
   return g;
 }
 function sign(parent, id, w, h, x, y, z, rotation = 0) {
-  box(parent, "billboard-frame", [w + 0.2, h + 0.2, 0.18], [x, y, z], dark);
-  const p = mesh(parent, `sign-${id}`, new T.PlaneGeometry(w, h), white, [
-    x,
-    y,
-    z + 0.11,
-  ]);
-  p.rotation.y = rotation;
+  const mount = group(parent, `billboard-${id}`);
+  mount.position.set(x, y, z);
+  mount.rotation.y = rotation;
+  box(mount, "billboard-frame", [w + 0.22, h + 0.22, 0.24], [0, 0, 0], dark);
+  const p = mesh(
+    mount,
+    `sign-${id}`,
+    new T.PlaneGeometry(w, h),
+    white,
+    [0, 0, 0.14],
+  );
+  for (const side of [-1, 1])
+    rod(
+      mount,
+      [side * w * 0.38, -h / 2, 0],
+      [side * w * 0.38, -h / 2 - 1.2, -0.35],
+      0.045,
+      steel,
+    );
   return p;
 }
 function palm(parent, x, z, height = 8) {
@@ -304,6 +316,121 @@ function building(parent, x, z, w, d, h, index) {
     );
     rod(g, [px, h + 0.8, z], [px, h + 4 + random() * 4, z], 0.035, dark);
   }
+  // Street-facing service balconies, exposed ducts and varied projecting masses.
+  const side = x < 0 ? 1 : -1;
+  for (let y = 4; y < Math.min(h, 45); y += 3.5) {
+    for (let a = -d / 2 + 1; a < d / 2; a += 3.1) {
+      box(
+        g,
+        "window-canopy",
+        [0.65, 0.12, 1.35],
+        [inner + side * 0.22, y + 1, z + a],
+        steel,
+      );
+      if (random() > 0.55) {
+        box(
+          g,
+          "external-ac",
+          [0.5, 0.55, 0.75],
+          [inner + side * 0.25, y - 0.6, z + a],
+          concrete[1],
+        );
+        for (let k = 0; k < 5; k++)
+          box(
+            g,
+            "ac-grille",
+            [0.025, 0.045, 0.62],
+            [inner + side * 0.515, y - 0.8 + k * 0.09, z + a],
+            dark,
+          );
+      }
+    }
+    if (Math.floor(y) % 2 === 0) {
+      box(
+        g,
+        "service-gallery",
+        [1.1, 0.12, d * 0.7],
+        [inner + side * 0.5, y - 0.9, z],
+        steel,
+      );
+      rod(
+        g,
+        [inner + side * 0.98, y - 0.1, z - d * 0.35],
+        [inner + side * 0.98, y - 0.1, z + d * 0.35],
+        0.025,
+        chrome,
+      );
+      for (let a = -d * 0.35; a < d * 0.35; a += 0.8)
+        rod(
+          g,
+          [inner + side * 0.98, y - 0.9, z + a],
+          [inner + side * 0.98, y - 0.1, z + a],
+          0.02,
+          steel,
+        );
+    }
+  }
+  for (let a = -d / 2 + 0.6; a < d / 2; a += 4.8) {
+    box(
+      g,
+      "facade-rib",
+      [0.38, h, 0.22],
+      [inner + side * 0.16, h / 2, z + a],
+      steel,
+    );
+    rod(
+      g,
+      [inner + side * 0.45, 1, z + a + 0.32],
+      [inner + side * 0.45, h * 0.8, z + a + 0.32],
+      0.07,
+      dark,
+    );
+  }
+  box(
+    g,
+    "setback-tower",
+    [w * 0.67, h * 0.28, d * 0.72],
+    [x - side * w * 0.15, h * 1.12, z - 1],
+    concrete[(index + 1) % 5],
+  );
+  if (index < 18) {
+    sign(
+      g,
+      index + 40,
+      index % 3 === 0 ? 3.5 : 7,
+      index % 3 === 0 ? 13 : 5,
+      inner + side * 1.25,
+      9 + (index % 4) * 5,
+      z + 3,
+      (side * Math.PI) / 2,
+    );
+    if (index % 3 === 0)
+      sign(
+        g,
+        index + 65,
+        3,
+        8,
+        inner + side * 0.3,
+        h * 0.65,
+        z - 5,
+        (side * Math.PI) / 2,
+      );
+  }
+  for (let k = 0; k < 5; k++)
+    box(
+      g,
+      "shop-shutter",
+      [0.12, 0.18, 3.3],
+      [inner + side * 0.15, 0.5 + k * 0.28, z + d * 0.27],
+      steel,
+    );
+  box(
+    g,
+    "shop-awning",
+    [2.2, 0.16, 5],
+    [inner + side, 3.1, z + d * 0.27],
+    index % 3 === 0 ? yellow : steel,
+  );
   const inward = x < 0 ? x + w / 2 + 0.25 : x - w / 2 - 0.25;
   for (let a = 0; a < 2; a++)
     rod(g, [inward, 2, z + a * 1.2], [inward, h - 2, z + a * 1.2], 0.11, steel);
@@ -498,6 +625,57 @@ function sportsCar(parent) {
       bake(wheel);
     }
   }
+  for (const side of [-1, 1]) {
+    for (const z of [-1.52, 1.47]) {
+      const arch = mesh(
+        car,
+        "sculpted-wheel-arch",
+        new T.TorusGeometry(0.46, 0.072, 8, 32, Math.PI),
+        teal,
+        [side * 1.11, 0.43, z],
+      );
+      arch.rotation.y = Math.PI / 2;
+    }
+    const cream = material("car-ivory-panel", 0xc9d0ba, 0.29, 0.4);
+    cream.side = T.DoubleSide;
+    patch(
+      car,
+      "front-quarter-ivory",
+      [
+        [side * 1.12, 0.85, -1.89],
+        [side * 1.09, 0.84, -0.81],
+        [side * 1.09, 0.51, -0.64],
+        [side * 1.13, 0.47, -1.78],
+      ],
+      cream,
+    );
+    rod(
+      car,
+      [side * 1.09, 0.83, -0.78],
+      [side * 1.09, 0.52, 0.53],
+      0.008,
+      dark,
+      "door-panel-gap",
+    );
+    box(
+      car,
+      "rear-aero-fin",
+      [0.035, 0.08, 0.5],
+      [side * 0.94, 0.98, 1.86],
+      teal,
+      0.01,
+    );
+  }
+  box(car, "hood-sculpt", [1.25, 0.045, 1.1], [0, 0.85, -1.47], teal, 0.07);
+  for (const side of [-1, 1])
+    box(
+      car,
+      "hood-vent",
+      [0.16, 0.025, 0.49],
+      [side * 0.6, 0.885, -1.25],
+      dark,
+      0.025,
+    );
   for (let i = 0; i < 9; i++)
     box(
       car,
@@ -713,6 +891,53 @@ export function createCity() {
     box(street, "bollard", [0.16, 0.8, 0.16], [9.2, 0.65, z], yellow, 0.02);
     person(street, 10.4 + random() * 4, z - 4, Math.abs(z) + 1);
     if (z % 30 === 0) person(street, 13 + random(), z - 9, Math.abs(z) + 2);
+  }
+  for (const z of [-8, -63, -153, -250]) {
+    for (const x of [-3, 2]) {
+      const arrow = group(street, "lane-arrow");
+      arrow.position.set(x, 0.018, z);
+      box(arrow, "arrow-shaft", [0.16, 0.012, 2.5], [0, 0, 0], white);
+      for (const side of [-1, 1]) {
+        const tip = box(
+          arrow,
+          "arrow-tip",
+          [0.14, 0.012, 0.95],
+          [side * 0.3, 0, -0.8],
+          white,
+        );
+        tip.rotation.y = side * -0.72;
+      }
+    }
+    mesh(
+      street,
+      "manhole",
+      new T.CylinderGeometry(0.42, 0.42, 0.015, 32),
+      steel,
+      [-1, 0.013, z + 6],
+    );
+    box(
+      street,
+      "road-repair",
+      [2.8, 0.004, 3.6],
+      [-7.6, -0.012, z + 11],
+      material("asphalt-patch", 0x444944, 0.98),
+    );
+    const bench = box(
+      street,
+      "bench",
+      [0.6, 0.25, 2],
+      [13.8, 0.72, z - 2],
+      steel,
+      0.04,
+    );
+    for (const dz of [-0.7, 0.7])
+      box(
+        street,
+        "bench-leg",
+        [0.4, 0.4, 0.07],
+        [13.8, 0.42, z - 2 + dz],
+        dark,
+      );
   }
   // Chain-link fencing on the left, behind the roadside safety rail.
   for (let z = 5; z > -120; z -= 3) {

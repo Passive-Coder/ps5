@@ -252,3 +252,251 @@ button:focus-visible {
     transition: none !important;
   }
 }
+
+#game-loading {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  z-index: 3;
+  background: #081517ed;
+  color: #e7ed45;
+  padding: 24px 32px;
+  font: 12px monospace;
+  letter-spacing: 3px;
+  pointer-events: none;
+}
+#game-loading span {
+  display: block;
+  margin-top: 16px;
+  height: 2px;
+  background: #e7ed45;
+  animation: loading 1.4s infinite;
+}
+#driving-ui {
+  position: absolute;
+  width: 1920px;
+  height: 1080px;
+  transform-origin: top left;
+  pointer-events: none;
+  font-family: "Courier New", monospace;
+  color: #ecedb5;
+  overflow: hidden;
+}
+#driving-ui button {
+  pointer-events: auto;
+  font: inherit;
+}
+.game-header {
+  position: absolute;
+  left: 45px;
+  right: 45px;
+  top: 35px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+.cyberpunk-wordmark {
+  font:
+    italic 900 50px Arial,
+    sans-serif;
+  color: #edf22d;
+  transform: skew(-15deg, -4deg);
+  text-shadow: 2px 2px #103d3c;
+  letter-spacing: -3px;
+}
+.cyberpunk-wordmark span {
+  display: block;
+  font:
+    11px "Courier New",
+    monospace;
+  letter-spacing: 6px;
+  text-align: center;
+  margin-top: 5px;
+}
+#return-home {
+  padding: 13px 19px;
+  border: 1px solid #d2df7c77;
+  background: #132b2ae8;
+  color: #edf0b5;
+  font-size: 20px;
+  letter-spacing: 2px;
+}
+#return-home:hover {
+  background: #e5ed50;
+  color: #162c2b;
+}
+.checkpoint-nav {
+  position: absolute;
+  right: 45px;
+  top: 153px;
+  width: 345px;
+  padding: 22px 23px;
+  background: #122a29dd;
+  border-left: 3px solid #dce74c;
+  box-shadow: 0 3px 30px #0002;
+  pointer-events: auto;
+}
+.checkpoint-nav p {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.5;
+}
+#game-aoi {
+  color: #edf341;
+  text-transform: uppercase;
+  font-weight: bold;
+}
+.checkpoint-nav p > span + span {
+  font-size: 14px;
+  color: #c3cdc0;
+}
+.checkpoint-buttons {
+  display: flex;
+  gap: 12px;
+  margin: 20px 0;
+}
+.checkpoint-buttons button {
+  width: 62px;
+  height: 48px;
+  border: 1px solid #97ad91;
+  background: transparent;
+  color: #dce8cb;
+  font-size: 21px;
+}
+.checkpoint-buttons button:hover,
+.checkpoint-buttons button[aria-pressed="true"] {
+  background: #e5ed50;
+  border-color: #e5ed50;
+  color: #132a27;
+}
+.checkpoint-buttons .answered:after {
+  content: "·";
+  margin-left: 2px;
+}
+#route-status {
+  font-size: 12px;
+  letter-spacing: 0.6px;
+  min-height: 36px;
+  color: #dde7ba;
+}
+.route-line {
+  height: 2px;
+  background: #67827866;
+  margin-top: 12px;
+}
+#route-progress {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: #ebed50;
+}
+.drive-console {
+  position: absolute;
+  bottom: 37px;
+  left: 45px;
+  background: #112b2be8;
+  border-left: 3px solid #dce74c;
+  padding: 19px 22px 14px;
+}
+.drive-readout {
+  display: flex;
+  align-items: baseline;
+  gap: 28px;
+  margin-bottom: 17px;
+}
+#drive-speed {
+  font-size: 33px;
+  font-weight: 400;
+  color: #eff554;
+}
+#drive-direction {
+  font-size: 13px;
+  letter-spacing: 2px;
+  color: #b5c5b8;
+}
+.drive-buttons {
+  display: flex;
+  gap: 12px;
+}
+.drive-buttons button {
+  padding: 11px 15px;
+  background: transparent;
+  border: 1px solid #76928a;
+  color: #e8ecbe;
+  font-size: 22px;
+  min-width: 140px;
+  touch-action: none;
+  user-select: none;
+}
+.drive-buttons button span {
+  font-size: 14px;
+  letter-spacing: 1px;
+}
+.drive-buttons button:active {
+  background: #e5ed50;
+  color: #102b26;
+}
+.drive-console p {
+  font-size: 11px;
+  letter-spacing: 1px;
+  margin: 17px 0 0;
+  color: #a5bbb0;
+}
+#checkpoint-question {
+  pointer-events: auto;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 690px;
+  padding: 35px 38px;
+  background: #0e2525f5;
+  border: 1px solid #c8d55c;
+  border-left: 4px solid #e3ef4b;
+  box-shadow: 0 20px 100px #0008;
+}
+#question-number {
+  font-size: 15px;
+  letter-spacing: 3px;
+  color: #e9ed53;
+  margin: 0 0 25px;
+}
+#question-prompt {
+  font:
+    400 29px/1.4 Arial,
+    sans-serif;
+  color: #ecedde;
+  margin: 0 0 28px;
+}
+#question-options {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+#question-options button {
+  font:
+    19px/1.5 Arial,
+    sans-serif;
+  text-align: left;
+  padding: 12px 15px;
+  border: 1px solid #5f8172;
+  color: #dfe9d7;
+  background: transparent;
+}
+#question-options button:hover,
+#question-options button[aria-pressed="true"] {
+  border-color: #e0e84d;
+  background: #c5d54922;
+}
+#question-feedback {
+  font-size: 15px;
+  color: #e3e967;
+  min-height: 18px;
+}
+#dismiss-question {
+  border: 0;
+  border-bottom: 1px solid #ccda68;
+  background: transparent;
+  color: #e9ed77;
+  padding: 10px 0;
+  font-size: 17px;
+}

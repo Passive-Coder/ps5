@@ -1,6 +1,6 @@
 import * as T from "three";
-import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
+import { loadWasmModel } from "./wasm-model.js";
+import { DrivingGame, DrivingControls } from "./driving.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
@@ -14,25 +14,10 @@ const ease = (t) => {
   return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 };
 
-async function loadRoom() {
-  const response = await fetch("/assets/room.wasm");
-  if (!response.ok) throw new Error(`Room asset returned ${response.status}`);
-  const { instance } = await WebAssembly.instantiateStreaming(response);
-  const { memory, model_ptr, model_size } = instance.exports;
-  const bytes = memory.buffer.slice(model_ptr(), model_ptr() + model_size());
-  const decoder = new DRACOLoader().setDecoderPath("/draco/").setWorkerLimit(2);
-  const loader = new GLTFLoader().setDRACOLoader(decoder);
-  try {
-    return (await loader.parseAsync(bytes, "/assets/")).scene;
-  } finally {
-    decoder.dispose();
-  }
-}
-
 export class RoomExperience {
   static async create(canvas, onPhase) {
     const [root, screen] = await Promise.all([
-      loadRoom(),
+      loadWasmModel("/assets/room.wasm"),
       TelevisionScreen.create(),
     ]);
     return new RoomExperience(canvas, root, screen, onPhase);
@@ -76,6 +61,13 @@ export class RoomExperience {
     this.tvScreen = root.getObjectByName("tv-screen");
     this.cabinet = root.getObjectByName("cabinet");
     this.controller = root.getObjectByName("controller");
+    this.controllerRest = this.controller.position.clone();
+    this.controllerRotation = this.controller.quaternion.clone();
+    this.controllerFront = new T.Vector3(3.45, 6.03, 2.0);
+    this.controllerFrontRotation = new T.Quaternion().setFromEuler(
+      new T.Euler(-0.08, -0.1, -0.04),
+    );
+    this.focusAmount = 0;
     this.gameCase = root.getObjectByName("game-case");
     this.disc = root.getObjectByName("disc");
     if (!this.ps5 || !this.tvScreen || !this.disc)
@@ -156,6 +148,7 @@ export class RoomExperience {
       disc: document.querySelector("#disc-control"),
       menu: document.querySelector("#aoi-menu"),
     };
+    this.drivingControls = new DrivingControls(this);
     this.frame = this.frame.bind(this);
     this.resize = this.resize.bind(this);
     this.resize();
@@ -243,6 +236,7 @@ export class RoomExperience {
     this.dom.gameCase.hidden = phase !== "ready";
     this.dom.disc.hidden = true;
     this.dom.menu.hidden = phase !== "home";
+    this.drivingControls.setActive(phase === "driving");
   }
   powerOn() {
     if (this.phase !== "off") return;
@@ -284,8 +278,45 @@ export class RoomExperience {
     if (this.phase === "home" && index >= 0 && index < 4)
       this.screen.select(index, this.time);
   }
+  async launchAOI(index) {
+    if (this.phase !== "home") return;
+    this.selectAOI(index);
+    this.setPhase("entering");
+    document.querySelector("#game-loading").hidden = false;
+    try {
+      this.game ??= await DrivingGame.create(
+        this.renderer,
+        this.environment.texture,
+        (state) => this.drivingControls.sync(state),
+      );
+      this.game.reset(index);
+      this.game.render();
+      this.tvScreen.material.map = this.game.target.texture;
+      this.tvScreen.material.needsUpdate = true;
+      this.setPhase("driving");
+      this.drivingControls.bind(this.game);
+      document.querySelector("#return-home").focus({ preventScroll: true });
+    } catch (error) {
+      console.error("Street initialization failed:", error);
+      this.returnHome();
+      document.querySelector("#scene-status").textContent =
+        "The street could not load. Please select an area to retry.";
+    } finally {
+      document.querySelector("#game-loading").hidden = true;
+    }
+  }
+  returnHome() {
+    if (!["driving", "entering"].includes(this.phase)) return;
+    this.tvScreen.material.map = this.screen.texture;
+    this.tvScreen.material.needsUpdate = true;
+    this.setPhase("home");
+    this.dom.menu
+      .querySelector(`[data-aoi="${this.screen.selected}"]`)
+      .focus({ preventScroll: true });
+  }
   setActive(active) {
     this.previous = 0;
+    if (!active) this.drivingControls.release();
     this.renderer.setAnimationLoop(active ? this.frame : null);
     if (active) this.resize();
   }
@@ -300,9 +331,25 @@ export class RoomExperience {
       distance = verticalSize / (2 * Math.tan(T.MathUtils.degToRad(17)));
     this.widePosition = new T.Vector3(0, 6.65, distance);
     this.wideTarget = new T.Vector3(0, 6.1, 0);
+    // Fit the physical 16:9 display inside both wide and tall desktop windows.
+    const tvHeight = Math.max(7.7, 12.65 / this.camera.aspect);
+    this.tvPosition = new T.Vector3(
+      0,
+      8.22,
+      tvHeight / (2 * Math.tan(T.MathUtils.degToRad(17))) - 0.462,
+    );
+    this.tvTarget = new T.Vector3(0, 8.22, -0.462);
     if (this.phase && this.phase !== "off" && this.phase !== "boot") {
-      this.camera.position.copy(this.widePosition);
-      this.lookTarget.copy(this.wideTarget);
+      this.camera.position.lerpVectors(
+        this.widePosition,
+        this.tvPosition,
+        this.focusAmount,
+      );
+      this.lookTarget.lerpVectors(
+        this.wideTarget,
+        this.tvTarget,
+        this.focusAmount,
+      );
       this.camera.lookAt(this.lookTarget);
     }
   }
@@ -356,6 +403,17 @@ export class RoomExperience {
           this.dom.disc.focus({ preventScroll: true });
       }
     }
+    if (["home", "entering", "driving"].includes(this.phase)) {
+      const a = this.screenPoint(0, 0),
+        b = this.screenPoint(1920, 1080);
+      const ui = this.drivingControls.dom;
+      ui.style.left = `${a.x}px`;
+      ui.style.top = `${a.y}px`;
+      ui.style.transform = `scale(${(b.x - a.x) / 1920})`;
+      const loading = document.querySelector("#game-loading");
+      loading.style.left = `${(a.x + b.x) / 2}px`;
+      loading.style.top = `${(a.y + b.y) / 2}px`;
+    }
     if (this.phase === "home")
       MENU_RECTS.forEach((r, index) => {
         const a = this.screenPoint(r.x, r.y),
@@ -386,6 +444,36 @@ export class RoomExperience {
       this.camera.lookAt(this.lookTarget);
       if (elapsed > duration) this.setPhase("ready");
     }
+    const focused = ["home", "entering", "driving"].includes(this.phase);
+    this.focusAmount = T.MathUtils.damp(
+      this.focusAmount,
+      focused ? 1 : 0,
+      this.reducedMotion ? 10 : 2.3,
+      delta,
+    );
+    if (focused) {
+      this.camera.position.lerpVectors(
+        this.widePosition,
+        this.tvPosition,
+        this.focusAmount,
+      );
+      this.lookTarget.lerpVectors(
+        this.wideTarget,
+        this.tvTarget,
+        this.focusAmount,
+      );
+      this.camera.lookAt(this.lookTarget);
+    }
+    this.controller.position.lerpVectors(
+      this.controllerRest,
+      this.controllerFront,
+      this.focusAmount,
+    );
+    this.controller.quaternion.slerpQuaternions(
+      this.controllerRotation,
+      this.controllerFrontRotation,
+      this.focusAmount,
+    );
     if (this.phase !== "off") {
       const poweredTime = this.time - this.powerStart,
         on = clamp(poweredTime * 0.9, 0, 1),
@@ -402,7 +490,7 @@ export class RoomExperience {
       this.powerMesh.material.emissive.set(0x8ac5ff);
       this.powerMesh.material.emissiveIntensity = 5 * on;
       this.consoleGlow.intensity = 2.2 * on;
-      const night = this.phase === "home" || this.phase === "loading";
+      const night = focused || this.phase === "loading";
       this.ambient.intensity = T.MathUtils.damp(
         this.ambient.intensity,
         night ? 0.1 : 0.9,
@@ -469,23 +557,33 @@ export class RoomExperience {
       }
     }
     if (this.phase === "loading" && elapsed > 1.7) this.setPhase("home");
-    if (
-      this.screen.update(this.phase, this.time, this.time - this.phaseStart)
-    ) {
-      this.ambilight.forEach((halo, index) => {
-        const color = this.screen.colors[index];
-        halo.material.uniforms.color.value.copy(color);
-        halo.material.uniforms.strength.value =
-          this.phase === "off"
-            ? 0
-            : this.phase === "home" || this.phase === "loading"
-              ? 0.9
-              : 0.15;
-        this.lights[index].color.copy(color);
-        this.lights[index].intensity =
-          this.phase === "off" ? 0 : this.phase === "home" ? 1.2 : 0.4;
-      });
-    }
+    if (this.phase === "driving") {
+      this.game.update(delta);
+      this.game.render();
+      this.drivingControls.update();
+    } else
+      this.screen.update(
+        this.phase === "entering" ? "home" : this.phase,
+        this.time,
+        this.time - this.phaseStart,
+      );
+    const colors =
+      this.phase === "driving" ? this.game.colors : this.screen.colors;
+    this.ambilight.forEach((halo, index) => {
+      halo.material.uniforms.color.value.lerp(
+        colors[index],
+        1 - Math.exp(-5 * delta),
+      );
+      halo.material.uniforms.strength.value =
+        this.phase === "off"
+          ? 0
+          : focused || this.phase === "loading"
+            ? 0.9
+            : 0.15;
+      this.lights[index].color.copy(halo.material.uniforms.color.value);
+      this.lights[index].intensity =
+        this.phase === "off" ? 0 : focused ? 1.2 : 0.4;
+    });
     this.updateControls();
     this.composer.render();
   }

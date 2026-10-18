@@ -30,6 +30,9 @@ async function enter() {
             inserting: "The Cyberpunk disc is entering the PS5.",
             loading: "Cyberpunk is loading.",
             home: "Cyberpunk home. Choose App, Web, FOSS, or DevOps.",
+            entering: "Loading the 3D street.",
+            driving:
+              "Choose a checkpoint to drive to its question, or hold W and S to drive forward and backward.",
           }[phase],
         );
       },
@@ -74,7 +77,9 @@ async function enter() {
       };
       button.addEventListener("pointerenter", select);
       button.addEventListener("focus", select);
-      button.addEventListener("click", select);
+      button.addEventListener("click", () =>
+        viewer.launchAOI(Number(button.dataset.aoi)),
+      );
     });
   } catch (error) {
     console.error("Scene initialization failed:", error);
