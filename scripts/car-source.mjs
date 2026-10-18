@@ -77,13 +77,22 @@ function section(z) {
   while (i < sections.length - 2 && z > sections[i + 1][0]) i++;
   const a = sections[i],
     b = sections[i + 1],
-    t = T.MathUtils.clamp((z - a[0]) / (b[0] - a[0]), 0, 1),
-    s = t * t * (3 - 2 * t);
-  return [
-    T.MathUtils.lerp(a[1], b[1], s),
-    T.MathUtils.lerp(a[2], b[2], s),
-    T.MathUtils.lerp(a[3], b[3], s),
-  ];
+    before = sections[Math.max(0, i - 1)],
+    after = sections[Math.min(sections.length - 1, i + 2)];
+  const t = T.MathUtils.clamp((z - a[0]) / (b[0] - a[0]), 0, 1),
+    t2 = t * t,
+    t3 = t2 * t,
+    dz = b[0] - a[0];
+  return [1, 2, 3].map((k) => {
+    const m0 = (b[k] - before[k]) / (b[0] - before[0]),
+      m1 = (after[k] - a[k]) / (after[0] - a[0]);
+    return (
+      (2 * t3 - 3 * t2 + 1) * a[k] +
+      (t3 - 2 * t2 + t) * m0 * dz +
+      (-2 * t3 + 3 * t2) * b[k] +
+      (t3 - t2) * m1 * dz
+    );
+  });
 }
 function bodyTop(x, z) {
   const [w, c, edge] = section(z),
@@ -91,16 +100,19 @@ function bodyTop(x, z) {
   return c + (edge - c) * Math.pow(t, 1.8) + 0.035 * Math.sin(t * Math.PI);
 }
 function canopy(x, t) {
-  const z = -1.2 + t * 2.25;
+  const z = -1.1 + t * 1.75;
   const dome = Math.pow(Math.max(0, Math.sin(Math.PI * t)), 0.65);
   const width = 0.79 + 0.055 * Math.sin(t * Math.PI);
   return [
     x * width,
     bodyTop(x * 0.73, z) +
-      0.35 * dome * Math.pow(Math.max(0, 1 - x * x), 0.38) +
+      0.27 * dome * Math.pow(Math.max(0, 1 - x * x), 0.38) +
       0.015,
     z,
   ];
+}
+function rearZ(x, z = 2.53) {
+  return z - 0.26 * x * x * T.MathUtils.clamp((z - 2.07) / 0.46, 0, 1);
 }
 export function buildCar(parent) {
   const car = group(parent, "player-car");
@@ -115,7 +127,7 @@ export function buildCar(parent) {
       (u, v) => {
         const z = start + (end - start) * v,
           x = u * 2 - 1;
-        return [x * section(z)[0], bodyTop(x, z), z];
+        return [x * section(z)[0], bodyTop(x, z), rearZ(x, z)];
       },
       60,
       100,
@@ -141,7 +153,7 @@ export function buildCar(parent) {
           return [
             side * (w - 0.055 * Math.sin(v * Math.PI) - 0.05 * (1 - v)),
             y,
-            z,
+            rearZ(1, z),
           ];
         },
         130,
@@ -285,34 +297,38 @@ export function buildCar(parent) {
         navy,
       );
   }
-  // Broad curved tail, inset diffuser, and thin light strips follow the reference silhouette.
-  surface(
-    car,
-    "rounded-tail",
-    (u, v) => {
-      const x = u * 2 - 1;
-      return [
-        x * (1.07 - 0.06 * Math.cos(v * Math.PI)),
-        0.37 + v * 0.58,
-        2.36 +
-          0.16 * Math.sqrt(Math.max(0, 1 - x * x)) -
-          0.065 * Math.sin(v * Math.PI),
-      ];
-    },
-    64,
-    22,
-    paint,
-    false,
-  );
+  // Rounded rear quarters taper into a dark lower bumper beneath the thin tail lamps.
+  for (const [low, high, mat] of [
+    [0.29, 0.7, navy],
+    [0.7, 0.82, paint],
+  ]) {
+    surface(
+      car,
+      "rounded-tail",
+      (u, v) => {
+        const x = u * 2 - 1,
+          y = low + (high - low) * v;
+        return [
+          x * (0.91 + 0.035 * Math.sin(((y - 0.29) / 0.53) * Math.PI)),
+          y + 0.02 * Math.abs(x) * v,
+          rearZ(x) + 0.012 * Math.sin(v * Math.PI),
+        ];
+      },
+      64,
+      20,
+      mat,
+      false,
+    );
+  }
   surface(
     car,
     "rear-diffuser",
     (u, v) => {
       const x = u * 2 - 1;
-      return [x * 0.99, 0.25 + v * 0.3, 2.39 + 0.11 * (1 - x * x)];
+      return [x * 0.88, 0.24 + v * 0.12, rearZ(x) + 0.013];
     },
     48,
-    14,
+    12,
     black,
     false,
   );
@@ -320,39 +336,42 @@ export function buildCar(parent) {
     car,
     "rear-grille",
     (u, v) => {
-      const x = u * 2 - 1;
-      return [x * 0.72, 0.62 + v * 0.16, 2.526 - 0.045 * x * x];
+      const x = (u * 2 - 1) * 0.63;
+      return [x, 0.61 + v * 0.12, rearZ(x / 0.91) + 0.026];
     },
     32,
     8,
     black,
     false,
   );
-  for (let i = -15; i <= 15; i++)
-    rod(car, [i * 0.043, 0.63, 2.535], [i * 0.043, 0.77, 2.535], 0.006, metal);
+  for (let i = -12; i <= 12; i++) {
+    const x = i * 0.046,
+      z = rearZ(x / 0.91) + 0.032;
+    rod(car, [x, 0.63, z], [x, 0.71, z], 0.004, black);
+  }
   for (const side of [-1, 1]) {
     curve(
       car,
       "sculpted-tail-light",
       [
-        [side * 0.22, 0.82, 2.527],
-        [side * 0.49, 0.82, 2.513],
-        [side * 0.73, 0.85, 2.486],
-        [side * 0.96, 0.9, 2.425],
-        [side * 1.045, 0.88, 2.35],
+        [side * 0.2, 0.765, rearZ(0.2 / 0.91) + 0.025],
+        [side * 0.48, 0.78, rearZ(0.48 / 0.91) + 0.025],
+        [side * 0.72, 0.81, rearZ(0.72 / 0.91) + 0.025],
+        [side * 0.9, 0.84, rearZ(0.9 / 0.91) + 0.015],
+        [side * 1.0, 0.88, 2.22],
       ],
-      0.019,
+      0.017,
       red,
     );
     curve(
       car,
       "tail-light-return",
       [
-        [side * 0.68, 0.823, 2.494],
-        [side * 0.81, 0.805, 2.475],
-        [side * 0.92, 0.833, 2.445],
+        [side * 0.6, 0.78, rearZ(0.6 / 0.91) + 0.028],
+        [side * 0.71, 0.757, rearZ(0.71 / 0.91) + 0.028],
+        [side * 0.84, 0.79, rearZ(0.84 / 0.91) + 0.025],
       ],
-      0.012,
+      0.01,
       red,
     );
     curve(
@@ -381,17 +400,14 @@ export function buildCar(parent) {
   curve(
     car,
     "rear-gold-belt",
-    [
-      [-1.02, 0.56, 2.42],
-      [-0.72, 0.555, 2.51],
-      [0, 0.55, 2.544],
-      [0.72, 0.555, 2.51],
-      [1.02, 0.56, 2.42],
-    ],
-    0.018,
+    Array.from({ length: 11 }, (_, i) => {
+      const x = ((i / 10) * 2 - 1) * 0.92;
+      return [x, 0.52, rearZ(x / 0.94) + 0.025];
+    }),
+    0.016,
     yellow,
   );
-  for (let i = -3; i <= 3; i++)
+  for (let i = -2; i <= 2; i++)
     box(
       car,
       "diffuser-fin",
@@ -519,5 +535,6 @@ export function buildCar(parent) {
       hub.rotation.z = Math.PI / 2;
       bake(wheel);
     }
+  car.scale.setScalar(0.9);
   return car;
 }

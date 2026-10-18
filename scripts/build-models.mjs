@@ -91,7 +91,11 @@ async function exportModel(source, filename) {
       method: KHRDracoMeshCompression.EncoderMethod.EDGEBREAKER,
       encodeSpeed: 5,
       decodeSpeed: 5,
-      quantizationBits: { POSITION: 16, NORMAL: 10, TEXCOORD: 12 },
+      quantizationBits: {
+        POSITION: 16,
+        NORMAL: filename === "city" ? 12 : 10,
+        TEXCOORD: filename === "city" ? 16 : 12,
+      },
     });
   const io = new NodeIO()
     .registerExtensions([KHRDracoMeshCompression, KHRMaterialsUnlit])

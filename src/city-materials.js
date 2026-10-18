@@ -164,14 +164,22 @@ export function decorateCity(root, assets) {
   const seen = new Set(),
     windows = Array.from({ length: 4 }, (_, i) => windowTexture(i));
   const metalWear = canvasTexture(256, 256, (c, w, h) => {
-    c.fillStyle = "#b5b8ae";
+    let seed = 8713;
+    const random = () => {
+      seed = (1664525 * seed + 1013904223) >>> 0;
+      return seed / 4294967296;
+    };
+    c.fillStyle = "#d5d8d0";
     c.fillRect(0, 0, w, h);
-    c.fillStyle = "#434f4b44";
-    for (let i = 0; i < 1600; i++)
-      c.fillRect((i * 71) % w, (i * 137) % h, 1, 1 + (i % 13));
-    c.fillStyle = "#262f2d55";
-    c.fillRect(0, 0, w, 7);
-    c.fillRect(0, h - 10, w, 10);
+    c.fillStyle = "#52615a14";
+    for (let i = 0; i < 2000; i++)
+      c.fillRect(random() * w, random() * h, 1, 1 + random() * 5);
+    const grime = c.createLinearGradient(0, 0, 0, h);
+    grime.addColorStop(0, "#17272600");
+    grime.addColorStop(0.8, "#17272600");
+    grime.addColorStop(1, "#443e2e3a");
+    c.fillStyle = grime;
+    c.fillRect(0, 0, w, h);
   });
   metalWear.wrapS = metalWear.wrapT = T.RepeatWrapping;
   root.traverse((o) => {
@@ -193,7 +201,7 @@ export function decorateCity(root, assets) {
         m.color.lerp(new T.Color(0xdfdfd2), 0.45);
       } else if (m.name === "pavement") {
         Object.assign(m, assets.concrete_floor_02);
-        m.color.set(0xc3c4b8);
+        m.color.set(0xb3bec4);
         m.roughness = 0.86;
         m.normalScale = new T.Vector2(0.22, 0.22);
       } else if (m.name.startsWith("cladding") || m.name === "painted-steel") {
@@ -212,6 +220,25 @@ export function decorateCity(root, assets) {
       } else if (m.name === "tail-light") {
         m.emissive = new T.Color(0xdf1731);
         m.emissiveIntensity = 1.4;
+      } else if (m.name === "road-paint") {
+        const map = canvasTexture(512, 512, (c, w, h) => {
+          c.fillStyle = "#d9d6c5";
+          c.fillRect(0, 0, w, h);
+          c.globalCompositeOperation = "destination-out";
+          let seed = 476;
+          const rnd = () => {
+            seed = (seed * 1664525 + 1013904223) >>> 0;
+            return seed / 4294967296;
+          };
+          for (let i = 0; i < 6500; i++)
+            c.fillRect(rnd() * w, rnd() * h, 1 + rnd() * 7, 1 + rnd() * 4);
+          for (let i = 0; i < 12; i++)
+            c.fillRect(rnd() * w, 0, 3 + rnd() * 8, h);
+        });
+        m.map = map;
+        m.transparent = true;
+        m.opacity = 0.6;
+        m.alphaTest = 0.1;
       } else if (m.name === "car-headlight") {
         m.emissive = new T.Color(0xcce8ee);
         m.emissiveIntensity = 0.7;

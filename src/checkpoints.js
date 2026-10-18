@@ -1,3 +1,4 @@
+export const DRIVE_LANE_X = 4.8;
 export const AOIS = ["App", "Web", "FOSS", "DevOps"];
 export const CHECKPOINT_DISTANCES = [22, 76, 130, 184];
 

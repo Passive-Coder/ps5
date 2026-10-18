@@ -10,6 +10,7 @@ import {
   bake,
 } from "./geometry.mjs";
 import { buildCar } from "./car-source.mjs";
+import { DRIVE_LANE_X } from "../src/checkpoints.js";
 
 const concrete = [0x8a887a, 0x656b69, 0x999383, 0x596368, 0x77766b].map(
   (c, i) => material(`concrete-${i}`, c),
@@ -107,61 +108,142 @@ function palm(parent, x, z, height = 8) {
 }
 function person(parent, x, z, id) {
   const g = group(parent, `pedestrian-${id}`),
-    cloth = clothing[id % clothing.length];
+    cloth = clothing[id === 1 ? 2 : id % clothing.length];
   g.position.set(x, 0.27, z);
-  g.rotation.y = id * 1.91;
-  mesh(g, "head", new T.SphereGeometry(0.115, 10, 8), skin, [0, 1.55, 0]);
-  cylinder(g, "neck", 0.06, 0.065, 0.12, [0, 1.39, 0], skin);
-  box(g, "jacket", [0.43, 0.59, 0.26], [0, 1.08, 0], cloth, 0.09);
-  box(g, "hips", [0.31, 0.2, 0.24], [0, 0.71, 0], dark, 0.04);
-  for (const s of [-1, 1]) {
-    rod(
+  g.rotation.y = id === 1 ? Math.PI + 0.15 : id * 1.91;
+  const sphere = (name, r, at, mat, scale = [1, 1, 1]) => {
+    const o = mesh(g, name, new T.SphereGeometry(r, 16, 12), mat, at);
+    o.scale.set(...scale);
+    return o;
+  };
+  const limb = (name, a, b, r, mat) => {
+    const start = new T.Vector3(...a),
+      end = new T.Vector3(...b),
+      direction = end.clone().sub(start);
+    const o = mesh(
       g,
-      [s * 0.1, 0.72, 0],
-      [s * 0.13, 0.39, s * 0.08],
-      0.065,
-      dark,
-      "thigh",
+      name,
+      new T.CapsuleGeometry(
+        r,
+        Math.max(0.01, direction.length() - r * 2),
+        5,
+        10,
+      ),
+      mat,
+      start.clone().add(end).multiplyScalar(0.5).toArray(),
     );
-    rod(
-      g,
-      [s * 0.13, 0.39, s * 0.08],
-      [s * 0.13, 0.08, -s * 0.11],
-      0.055,
+    o.quaternion.setFromUnitVectors(
+      new T.Vector3(0, 1, 0),
+      direction.normalize(),
+    );
+    return o;
+  };
+  sphere("head", 0.117, [0, 1.57, 0], skin, [0.89, 1.18, 0.96]);
+  sphere("nose", 0.028, [0, 1.56, 0.112], skin, [0.65, 0.8, 1]);
+  for (const side of [-1, 1])
+    sphere("ear", 0.024, [side * 0.105, 1.57, 0], skin, [0.5, 1, 0.75]);
+  sphere("hair", 0.118, [0, 1.65, -0.006], dark, [0.94, 0.64, 1]);
+  cylinder(g, "neck", 0.056, 0.065, 0.14, [0, 1.41, 0], skin);
+  const torso = mesh(
+    g,
+    "shirt",
+    new T.LatheGeometry(
+      [
+        [0.11, 0.76],
+        [0.16, 0.8],
+        [0.18, 1.0],
+        [0.23, 1.25],
+        [0.18, 1.33],
+        [0.075, 1.36],
+      ].map((p) => new T.Vector2(...p)),
+      24,
+    ),
+    cloth,
+  );
+  torso.scale.z = 0.65;
+  const collar = mesh(
+    g,
+    "collar",
+    new T.TorusGeometry(0.074, 0.013, 5, 20),
+    dark,
+    [0, 1.355, 0],
+  );
+  collar.rotation.x = Math.PI / 2;
+  box(g, "hips", [0.31, 0.22, 0.23], [0, 0.74, 0], dark, 0.07);
+  for (const side of [-1, 1]) {
+    const stride = side * 0.14;
+    limb(
+      "trouser-thigh",
+      [side * 0.09, 0.73, 0],
+      [side * 0.12, 0.4, stride],
+      0.075,
       dark,
-      "shin",
+    );
+    limb(
+      "trouser-calf",
+      [side * 0.12, 0.4, stride],
+      [side * 0.13, 0.09, -stride],
+      0.058,
+      dark,
     );
     box(
       g,
-      "boot",
+      "shoe",
       [0.14, 0.12, 0.29],
-      [s * 0.13, 0.055, -s * 0.11 - 0.05],
+      [side * 0.13, 0.055, -stride + 0.04],
       rubber,
-      0.025,
+      0.04,
     );
-    rod(
-      g,
-      [s * 0.24, 1.3, 0],
-      [s * 0.31, 1.02, s * 0.04],
-      0.06,
+    limb(
+      "sleeve",
+      [side * 0.2, 1.27, 0],
+      [side * 0.265, 1.13, -stride * 0.4],
+      0.077,
       cloth,
+    );
+    limb(
       "upper-arm",
-    );
-    rod(
-      g,
-      [s * 0.31, 1.02, s * 0.04],
-      [s * 0.34, 0.79, s * 0.1],
-      0.045,
+      [side * 0.265, 1.14, -stride * 0.4],
+      [side * 0.3, 0.99, -stride * 0.7],
+      0.051,
       skin,
-      "forearm",
     );
-    mesh(g, "hand", new T.SphereGeometry(0.055, 8, 6), skin, [
-      s * 0.34,
-      0.76,
-      s * 0.1,
-    ]);
+    limb(
+      "forearm",
+      [side * 0.3, 0.99, -stride * 0.7],
+      [side * 0.32, 0.81, -stride],
+      0.043,
+      skin,
+    );
+    sphere(
+      "hand",
+      0.052,
+      [side * 0.32, 0.78, -stride],
+      skin,
+      [0.7, 1.15, 0.65],
+    );
+    sphere("elbow", 0.05, [side * 0.3, 0.99, -stride * 0.7], skin);
   }
-  cylinder(g, "hair", 0.117, 0.11, 0.09, [0, 1.64, 0], dark);
+  if (id % 3 === 1) {
+    box(g, "backpack", [0.29, 0.43, 0.17], [0, 1.1, -0.19], clothing[3], 0.075);
+    for (const side of [-1, 1])
+      rod(
+        g,
+        [side * 0.14, 1.3, -0.17],
+        [side * 0.15, 0.92, -0.17],
+        0.022,
+        dark,
+        "backpack-strap",
+      );
+    box(
+      g,
+      "backpack-pocket",
+      [0.22, 0.16, 0.035],
+      [0, 1.0, -0.286],
+      dark,
+      0.04,
+    );
+  }
 }
 function building(parent, x, z, w, d, h, index) {
   const g = group(parent, `city-block-${index}`);
@@ -450,7 +532,7 @@ function building(parent, x, z, w, d, h, index) {
         [inner + 0.45, y, z - 8],
         steel,
       );
-    sign(g, "militech", 7, 3, inner + 1.6, 8, z + 8, Math.PI / 2);
+    sign(g, "militech", 10, 3.5, -18.5, 11.2, -54, 1.2);
   }
   bake(g);
 }
@@ -551,6 +633,54 @@ function van(parent, x, z, color = 0x8b8c80, id = 0) {
     ],
     carGlass,
   );
+  for (const side of [-1, 1]) {
+    box(
+      g,
+      "rub-strip",
+      [0.035, 0.075, 4.15],
+      [side * 1.073, 0.85, 0],
+      dark,
+      0.018,
+    );
+    for (const dz of [-0.73, 0.8])
+      box(
+        g,
+        "sliding-door-seam",
+        [0.012, 1.26, 0.015],
+        [side * 1.066, 1.45, dz],
+        steel,
+      );
+    box(g, "door-track", [0.026, 0.035, 1.8], [side * 1.08, 1.7, 0.65], steel);
+    box(
+      g,
+      "van-door-handle",
+      [0.025, 0.045, 0.23],
+      [side * 1.08, 1.48, -0.62],
+      dark,
+      0.009,
+    );
+    box(
+      g,
+      "van-mirror",
+      [0.17, 0.22, 0.25],
+      [side * 1.16, 1.88, -1.67],
+      dark,
+      0.04,
+    );
+    for (const dz of [-1.38, 1.4]) {
+      const hub = cylinder(
+        g,
+        "van-wheel-hub",
+        0.24,
+        0.24,
+        0.24,
+        [side * 1.055, 0.4, dz],
+        chrome,
+        24,
+      );
+      hub.rotation.z = Math.PI / 2;
+    }
+  }
   box(g, "door-seam", [0.02, 1.37, 0.025], [0, 1.4, 2.28], dark);
   bake(g);
   return g;
@@ -584,7 +714,7 @@ export function createCity() {
     );
   }
   for (let z = 35; z > -350; z -= 5.4) {
-    for (const x of [-6.3, -0.7, 4.7])
+    for (const x of [-8.5, -3, 3])
       box(street, "lane-marking", [0.1, 0.012, 2.8], [x, 0.001, z], white);
     for (const x of [-13.6, 8])
       box(street, "edge-line", [0.12, 0.014, 5.5], [x, 0.002, z], yellow);
@@ -647,7 +777,12 @@ export function createCity() {
     if (z % 30 === 0) palm(street, 13.7, z - 6, 7.8 + random() * 2);
     box(street, "utility-box", [0.65, 1.1, 0.52], [14, 0.8, z], steel, 0.04);
     box(street, "bollard", [0.16, 0.8, 0.16], [9.2, 0.65, z], yellow, 0.02);
-    person(street, 10.4 + random() * 4, z - 4, Math.abs(z) + 1);
+    person(
+      street,
+      z === 0 ? 10.5 : 10.4 + random() * 4,
+      z === 0 ? 1.2 : z - 4,
+      Math.abs(z) + 1,
+    );
     if (z % 30 === 0) person(street, 13 + random(), z - 9, Math.abs(z) + 2);
   }
   for (const z of [-8, -63, -153, -250]) {
@@ -697,8 +832,31 @@ export function createCity() {
         dark,
       );
   }
-  palm(street, -13.4, -29, 9.2);
-  palm(street, -13.4, -91, 8.5);
+  box(
+    street,
+    "foreground-drain-bed",
+    [0.85, 0.025, 4.4],
+    [9.55, 0.278, -0.6],
+    dark,
+  );
+  for (let i = 0; i < 30; i++)
+    box(
+      street,
+      "foreground-drain-grate",
+      [0.8, 0.028, 0.027],
+      [9.55, 0.3, 1.5 - i * 0.14],
+      steel,
+    );
+  const roadPanel = mesh(
+    street,
+    "road-paint-panel",
+    new T.PlaneGeometry(2.9, 4),
+    material("road-paint", 0xc5c4af, 0.93),
+    [DRIVE_LANE_X, 0.005, -14],
+  );
+  roadPanel.rotation.x = -Math.PI / 2;
+  palm(street, -13.4, -62, 20);
+  palm(street, -13.4, -110, 13);
   // Chain-link fencing on the left, behind the roadside safety rail.
   for (let z = 5; z > -120; z -= 3) {
     rod(street, [-15, 0.3, z], [-15, 3.4, z], 0.035, chrome);
@@ -744,6 +902,11 @@ export function createCity() {
         rod(g, [15, 19, z], [x, y + 0.3, z - 1.2], 0.02, dark);
       box(g, "cable-pylon", [0.5, 19, 0.6], [15, 9.5, z], steel);
     }
+    if (z === -52) {
+      for (const child of g.children) child.position.z -= z;
+      g.position.z = z;
+      g.rotation.y = -0.38;
+    }
     bake(g);
   }
   for (const z of [-24, -89, -180, -270]) {
@@ -778,7 +941,7 @@ export function createCity() {
     [-29, -204, 22, 33, 94],
     [-31, -256, 24, 43, 116],
     [-28, -315, 23, 38, 85],
-    [25, -25, 18, 50, 17],
+    [25, -25, 18, 50, 14],
     [32, -86, 25, 38, 47],
     [26, -139, 18, 31, 73],
     [32, -194, 26, 41, 92],
@@ -828,18 +991,18 @@ export function createCity() {
   }
   bake(skyline);
   sign(root, "hotel", 4.6, 2.2, -15.4, 10.5, -5, Math.PI / 2);
-  sign(root, "kiosk", 1.5, 2.7, 11.6, 1.75, -4.5);
+  sign(root, "kiosk", 1.5, 2.7, 14.5, 1.75, -4.5);
   sign(root, "right-poster", 4.5, 7, 16, 13, -7, -0.25);
   buildCar(root);
-  van(root, -5.4, -2.5, 0x929185, 0);
-  van(root, -8.8, -25, 0x747c70, 1);
-  van(root, -1.1, -44, 0x526c5f, 2).scale.set(1.3, 1.5, 1.3);
-  van(root, 5.9, -83, 0x707b77, 3);
+  van(root, DRIVE_LANE_X - 3.7, -1.5, 0x929185, 0);
+  van(root, -5.8, -25, 0x747c70, 1);
+  van(root, DRIVE_LANE_X - 3.1, -44, 0x526c5f, 2).scale.set(1.3, 1.5, 1.3);
+  van(root, 1.4, -83, 0x707b77, 3);
   van(root, -5.3, -137, 0x9e9785, 4);
   const checkpoints = group(root, "checkpoints");
   for (let i = 0; i < 4; i++) {
     const marker = group(checkpoints, `checkpoint-${i}`);
-    marker.position.set(2, 0, -22 - i * 54);
+    marker.position.set(DRIVE_LANE_X, 0, -22 - i * 54);
     const m = material(`checkpoint-${i}`, 0xd3df55, 0.35, 0.1);
     const ring = mesh(
       marker,

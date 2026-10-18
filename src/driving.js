@@ -8,6 +8,7 @@ import {
 } from "./city-materials.js";
 import {
   AOIS,
+  DRIVE_LANE_X,
   CHECKPOINT_DISTANCES,
   QUESTIONS,
   DriveState,
@@ -41,7 +42,7 @@ export class DrivingGame {
     this.scene.environmentIntensity = 0.42;
     this.scene.add(new T.HemisphereLight(0xb7d6e5, 0x716853, 1.5));
     this.sun = new T.DirectionalLight(0xffefd2, 4.1);
-    this.sun.position.set(55, 95, -45);
+    this.sun.position.set(55, 70, -75);
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(2048, 2048);
     Object.assign(this.sun.shadow.camera, {
@@ -103,7 +104,7 @@ export class DrivingGame {
       type: T.HalfFloatType,
     });
     const probe = new T.CubeCamera(0.1, 500, cubeTarget);
-    probe.position.set(2, 1.5, -5);
+    probe.position.set(DRIVE_LANE_X, 1.5, -5);
     this.car.visible = false;
     this.markers.forEach((m) => (m.visible = false));
     probe.update(renderer, this.scene);
@@ -119,11 +120,29 @@ export class DrivingGame {
       metalness: 0.55,
       roughness: 0.24,
       clearcoat: 1,
-      clearcoatRoughness: 0.16,
+      clearcoatRoughness: 0.09,
       envMapIntensity: 1.15,
     });
+    const pearl = new T.MeshPhysicalMaterial({
+      color: 0xd7d8c9,
+      metalness: 0.32,
+      roughness: 0.22,
+      clearcoat: 1,
+      clearcoatRoughness: 0.1,
+      envMapIntensity: 1,
+    });
+    const lower = new T.MeshPhysicalMaterial({
+      color: 0x073947,
+      metalness: 0.48,
+      roughness: 0.26,
+      clearcoat: 0.7,
+      clearcoatRoughness: 0.16,
+    });
     this.car.traverse((o) => {
-      if (o.isMesh && o.material.name === "car-paint") o.material = paint;
+      if (!o.isMesh) return;
+      if (o.material.name === "car-paint") o.material = paint;
+      else if (o.material.name === "car-pearl") o.material = pearl;
+      else if (o.material.name === "car-lower-paint") o.material = lower;
     });
   }
   reset(aoi) {
@@ -135,17 +154,18 @@ export class DrivingGame {
     const before = this.state.distance;
     this.state.update(delta);
     this.car.position.set(
-      2,
+      DRIVE_LANE_X,
       Math.sin(this.time * 17) *
         Math.min(0.009, Math.abs(this.state.speed) * 0.001),
       -this.state.distance,
     );
     for (const wheel of this.wheels)
-      wheel.rotation.x -= (this.state.distance - before) / 0.45;
+      wheel.rotation.x -=
+        (this.state.distance - before) / (0.43 * this.car.scale.y);
     const distance = this.state.distance;
-    this.camera.position.set(7.0, 3.45, 7.4 - distance);
-    this.camera.lookAt(2.7, 1.8, -8 - distance);
-    this.sun.position.set(55, 95, -45 - distance);
+    this.camera.position.set(DRIVE_LANE_X + 5, 2.4, 7.6 - distance);
+    this.camera.lookAt(DRIVE_LANE_X + 0.7, 2.15, -8 - distance);
+    this.sun.position.set(55, 70, -75 - distance);
     this.sun.target.position.set(0, 0, -35 - distance);
     this.markers.forEach((marker, i) => {
       marker.visible = this.state.arrived !== i;
