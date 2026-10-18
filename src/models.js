@@ -142,6 +142,7 @@ function emblem(parent, size, position, rotation = [0, 0, 0]) {
   logoTexture ??= makeLogoTexture();
   logoMaterial ??= new THREE.MeshStandardMaterial({ map: logoTexture, transparent: true, depthWrite: false, roughness: 0.55, polygonOffset: true, polygonOffsetFactor: -2 });
   const object = mesh(new THREE.PlaneGeometry(size, size), logoMaterial, parent, position);
+  object.name = 'playstation-mark';
   object.rotation.set(...rotation);
   object.castShadow = false;
   return object;
@@ -172,7 +173,7 @@ function frontDetails(group, config, variant) {
       const p = shellPoint(config, side, t, 0.97, 0.045);
       points.push(p);
     }
-    tube(group, points, 0.004, materials.blue);
+    tube(group, points, 0.009, materials.blue).name = 'console-light';
     for (let i = 0; i < 52; i++) {
       const t = 0.065 + 0.86 * i / 52;
       const p = shellPoint(config, side, t, 0.945, 0.035);
