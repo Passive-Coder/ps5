@@ -191,26 +191,20 @@ function frontDetails(group, config, variant) {
     };
     const x = drivePoint(y / config.height + 0.5)[0] - 0.05;
     const z = frontAt(y) + 0.035;
-    const housing = shapeMesh(group, s => {
-      const bottom = -config.height / 2 + 0.025;
-      s.moveTo(config.width * 0.17, bottom);
-      for (let i = 0; i <= 40; i++) {
-        const t = 0.008 + i / 40 * 0.61;
-        const p = drivePoint(t);
-        s.lineTo(p[0], p[1]);
-      }
-      for (let i = 40; i >= 0; i--) {
-        const t = 0.008 + i / 40 * 0.61;
-        const p = drivePoint(t);
-        const coreEdge = (config.width - 0.07) / 2 * (0.4 + 0.6 * t);
-        const inner = THREE.MathUtils.lerp(coreEdge, p[0], smoothstep(0.32, 0.618, t));
-        s.lineTo(inner, p[1]);
-      }
-      s.closePath();
-    }, 0.12, materials.white, 0.009);
-    const points = housing.geometry.attributes.position;
-    for (let i = 0; i < points.count; i++) points.setZ(i, points.getZ(i) + frontAt(points.getY(i)) - 0.12);
-    housing.geometry.computeVertexNormals();
+    const rows=64, cols=8, positions=[], indices=[], layerSize=(rows+1)*(cols+1);
+    for(let layer=0;layer<2;layer++)for(let row=0;row<=rows;row++){
+      const t=.008+row/rows*.61,p=drivePoint(t),coreEdge=(config.width-.07)/2*(.4+.6*t);
+      const inner=THREE.MathUtils.lerp(coreEdge,p[0],smoothstep(.32,.618,t));
+      for(let col=0;col<=cols;col++)positions.push(THREE.MathUtils.lerp(inner,p[0],col/cols),p[1],frontAt(p[1])-.12*layer);
+    }
+    const quad=(a,b,c,d,reverse=false)=>indices.push(...(reverse?[a,c,b,a,d,c]:[a,b,c,a,c,d]));
+    for(let layer=0;layer<2;layer++)for(let row=0;row<rows;row++)for(let col=0;col<cols;col++){
+      const a=layer*layerSize+row*(cols+1)+col;quad(a,a+1,a+cols+2,a+cols+1,layer===1);
+    }
+    for(let row=0;row<rows;row++)for(const col of [0,cols]){const a=row*(cols+1)+col;quad(a,a+cols+1,a+cols+1+layerSize,a+layerSize,col===cols);}
+    for(let col=0;col<cols;col++)for(const row of [0,rows]){const a=row*(cols+1)+col;quad(a,a+layerSize,a+layerSize+1,a+1,row===rows);}
+    const housing=new THREE.BufferGeometry();housing.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));housing.setIndex(indices);housing.computeVertexNormals();
+    mesh(housing,materials.white,group);
     const slot = box(group, [0.047, config.height * 0.36, 0.02], [x, y, z], materials.dark, 0.018);
     const slotPoints = slot.geometry.attributes.position;
     for (let i = 0; i < slotPoints.count; i++) slotPoints.setZ(i, slotPoints.getZ(i) + frontAt(slotPoints.getY(i) + y) - frontAt(y));

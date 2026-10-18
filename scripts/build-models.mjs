@@ -44,6 +44,9 @@ const io = new NodeIO().registerExtensions([KHRDracoMeshCompression, KHRMaterial
   'draco3d.encoder': await draco.createEncoderModule(), 'draco3d.decoder': await draco.createDecoderModule(),
 });
 const glb = await io.writeBinary(document);
+const jsonSize=new DataView(glb.buffer,glb.byteOffset).getUint32(12,true);
+const manifest=JSON.parse(new TextDecoder().decode(glb.subarray(20,20+jsonSize)));
+if(!manifest.meshes.every(mesh=>mesh.primitives.every(primitive=>primitive.extensions?.KHR_draco_mesh_compression)))throw new Error('Every scene mesh must use the WebAssembly Draco decoder');
 
 function uleb(value) { const bytes = []; do { let byte = value & 127; value >>>= 7; if (value) byte |= 128; bytes.push(byte); } while (value); return bytes; }
 function sleb(value) { const bytes = []; for (;;) { let byte = value & 127; value >>= 7; const done = (value === 0 && !(byte & 64)) || (value === -1 && (byte & 64)); bytes.push(done ? byte : byte | 128); if (done) return bytes; } }

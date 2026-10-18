@@ -1,81 +1,26 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#f6f6f3" />
-    <meta name="description" content="An interactive study of the PlayStation 5. Explore the Original, Slim, and Pro consoles from every angle." />
-    <title>PS5 — Form in play</title>
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-  </head>
-  <body>
-    <div id="app">
-      <header class="header">
-        <a href="/" class="wordmark" aria-label="PS5 studio home"><svg viewBox="0 0 48 40" aria-hidden="true"><path d="M18 2v29l6 2V10c7 2 9 5 7 9v7c10 3 13-9 5-15C31 7 25 4 18 2Z" fill="currentColor"/><path d="m15 24-9 4c-12 6-2 12 9 8v-5l-7 2c-5 1-6-1-2-2l9-3Zm12 6 9-3c10-3 16 2 9 6l-18 7v-5l13-5c3-1 0-2-3-1l-10 4Z" fill="currentColor"/></svg><span>PS5<span class="wordmark-divider"></span><span class="wordmark-studio">DESIGN STUDIO</span></span></a>
-        <nav class="top-nav" aria-label="Studio navigation">
-          <span class="nav-label"><span class="status-dot"></span> INTERACTIVE STUDY</span>
-          <button class="text-button" id="references-open">The references <span aria-hidden="true">↗</span></button>
-        </nav>
-      </header>
-
-      <main class="studio">
-        <section class="inspector" aria-label="Console configuration">
-          <p class="eyebrow">AN EXPLORATION OF FORM</p>
-          <h1>Form<br /> in play<span class="blue-period">.</span></h1>
-          <p class="intro">An icon. From every angle.</p>
-
-          <div class="model-picker" role="group" aria-labelledby="model-label">
-            <div class="section-label"><span id="model-label">01 / THE CONSOLE</span><span class="tiny-label">3 MODELS</span></div>
-            <button class="model-option" data-model="original" aria-pressed="false"><span class="console-glyph original-glyph" aria-hidden="true"><i></i><i></i></span><span class="model-copy"><strong>PS5</strong><span>Original / Disc edition</span></span><span class="model-year">2020</span><span class="selection-dot"></span></button>
-            <button class="model-option" data-model="slim" aria-pressed="false"><span class="console-glyph slim-glyph" aria-hidden="true"><i></i><i></i><b></b></span><span class="model-copy"><strong>PS5 Slim</strong><span>Compact / Disc edition</span></span><span class="model-year">2023</span><span class="selection-dot"></span></button>
-            <button class="model-option active" data-model="pro" aria-pressed="true"><span class="console-glyph pro-glyph" aria-hidden="true"><i></i><i></i><b></b></span><span class="model-copy"><strong>PS5 Pro</strong><span>Performance / Digital edition</span></span><span class="model-year">2024</span><span class="selection-dot"></span></button>
-          </div>
-
-          <div class="orientation-control">
-            <div class="section-label"><span>02 / POSITION</span></div>
-            <div class="segmented" role="group" aria-label="Console position">
-              <button class="active" data-orientation="vertical" aria-pressed="true"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="6.5" y="2" width="7" height="15" rx="1.5"/><path d="M4 18h12"/></svg>Vertical</button>
-              <button data-orientation="horizontal" aria-pressed="false"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2" y="7" width="16" height="7" rx="1.5"/><path d="M4 16h12"/></svg>Horizontal</button>
-            </div>
-          </div>
-
-          <div class="scene-options">
-            <div class="section-label"><span>03 / THE SCENE</span></div>
-            <label class="switch-row" for="controller-toggle"><span>DualSense controller</span><input class="switch" type="checkbox" id="controller-toggle" checked /><span class="switch-track" aria-hidden="true"></span></label>
-            <div class="light-row"><span>Studio lighting</span><div class="swatches" role="group" aria-label="Studio lighting"><button class="swatch light active" data-theme="light" aria-label="Light studio" aria-pressed="true"></button><button class="swatch dark" data-theme="dark" aria-label="Dark studio" aria-pressed="false"></button></div></div>
-          </div>
-          <p class="study-note">A study in curves, contrast,<br />and the spaces in between.</p>
-        </section>
-
-        <section class="viewport" id="viewport" aria-label="Interactive PS5 3D viewer">
-          <div class="viewport-top"><span class="viewport-tag">OBJECT <span id="object-number">03</span> <span class="tag-separator">/</span> <span id="object-name">PLAYSTATION 5 PRO</span></span><button class="icon-button" id="fullscreen" aria-label="Enter fullscreen" title="Fullscreen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></svg></button></div>
-          <div class="background-type" aria-hidden="true">PS5</div>
-          <canvas id="scene" tabindex="0" aria-label="PS5 Pro 3D model. Drag to orbit, scroll to zoom. Use arrow keys to rotate and plus or minus to zoom."></canvas>
-          <div class="loading" id="loading"><span class="loading-ring"></span><span>Setting the scene</span></div>
-          <div class="viewer-error" id="viewer-error" hidden><h2>The studio needs WebGL</h2><p>Enable hardware acceleration in your browser, then reload to explore the 3D models.</p><button class="primary-button" id="reload">Reload studio</button></div>
-          <div class="model-caption"><span class="caption-line"></span><div><strong id="caption-name">PS5 Pro</strong><span id="caption-detail">Three cooling ribs</span></div></div>
-          <div class="viewer-bottom">
-            <div class="gesture-hint"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5h6m-3-3 3 3-3 3M5 9v6m-3-3 3 3 3-3m7 7H9m3 3-3-3 3-3m7-7V9m3 3-3-3-3 3"/></svg><span>Drag to explore <span class="hint-dot">·</span> Scroll to zoom</span></div>
-            <div class="viewer-tools">
-              <button class="tool-button" id="rotate-toggle" aria-label="Start auto rotation" aria-pressed="false" title="Auto rotate"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 8a8 8 0 1 0 .2 7M20 3v5h-5"/></svg><span>Auto rotate</span></button>
-              <span class="tool-divider"></span>
-              <button class="icon-button" id="reset-view" aria-label="Reset view" title="Reset view"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10V4m0 6h6M4 9a8 8 0 1 1-1 6"/></svg></button>
-              <button class="icon-button" id="export-image" aria-label="Save image" title="Save image"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-4-4 4 4 4-4M4 15v5h16v-5"/></svg></button>
-            </div>
-          </div>
-        </section>
-      </main>
-
-      <footer class="footer"><span>DESIGNED TO BE EXPLORED.</span><span class="footer-center">WHITE SHELL. BLACK CORE. <span class="footer-blue">PURE PLAY.</span></span><span class="footer-right"><span class="live-dot"></span> REAL-TIME 3D</span></footer>
-    </div>
-
-    <dialog id="references-dialog" class="reference-dialog" aria-labelledby="references-title">
-      <div class="dialog-heading"><div><p class="eyebrow">THE ORIGINAL PERSPECTIVES</p><h2 id="references-title">The reference library.</h2></div><button class="icon-button" id="references-close" aria-label="Close references"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button></div>
-      <p class="dialog-intro">Four photographs. Three distinct silhouettes.</p>
-      <div class="reference-grid"><figure><div><img src="/references/slim.png" alt="Reference 1: PS5 Slim disc console standing vertically beside a DualSense controller" /></div><figcaption><span>01 / PS5 Slim</span><button data-reference-model="slim">Explore ↗</button></figcaption></figure><figure><div><img src="/references/original.png" alt="Reference 2: Original PS5 disc console with continuous white panels and a DualSense controller" /></div><figcaption><span>02 / PS5 Original</span><button data-reference-model="original">Explore ↗</button></figcaption></figure><figure><div><img src="/references/pro-vertical.png" alt="Reference 3: Vertical PS5 Pro with three black ribs between the white panels" /></div><figcaption><span>03 / PS5 Pro</span><button data-reference-model="pro" data-reference-orientation="vertical">Explore ↗</button></figcaption></figure><figure><div><img src="/references/pro-horizontal.png" alt="Reference 4: PS5 Pro in a horizontal position beside a DualSense controller" /></div><figcaption><span>04 / PS5 Pro, horizontal</span><button data-reference-model="pro" data-reference-orientation="horizontal">Explore ↗</button></figcaption></figure></div>
-      <p class="reference-note">Reconstructed from the supplied photographs. An independent visual study; this is not an official Sony model or an engineering file.</p>
-    </dialog>
-    <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script type="module" src="/src/main.js"></script>
-  </body>
+<head>
+  <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#080a0d" />
+  <meta name="description" content="Power on. Insert the disc. Enter the ACM–VIT Cyberpunk experience." />
+  <title>ACM–VIT · Cyberpunk</title><link rel="icon" href="/assets/acm.png" />
+</head>
+<body>
+  <main id="experience" hidden>
+    <canvas id="scene" aria-label="A PlayStation 5 beside a television and white media cabinet"></canvas>
+    <div id="loading" role="status"><span class="loading-line"></span><span>LOADING</span></div>
+    <button id="power-control" class="power-control" aria-label="Turn on the PlayStation 5" hidden><span class="power-dot"></span><span class="power-label">POWER ON</span></button>
+    <button id="case-control" class="object-control" aria-label="Cyberpunk 2077 game case: hover to remove the disc" hidden></button>
+    <button id="disc-control" class="object-control disc-control" aria-label="Insert the Cyberpunk 2077 disc into the PS5" hidden></button>
+    <nav id="aoi-menu" aria-label="Areas of interest" hidden><button data-aoi="0" aria-pressed="true">App</button><button data-aoi="1" aria-pressed="false">Web</button><button data-aoi="2" aria-pressed="false">FOSS</button><button data-aoi="3" aria-pressed="false">DevOps</button></nav>
+    <p id="scene-status" class="sr-only" role="status" aria-live="polite"></p>
+    <div id="error" hidden><p>The scene could not load.</p><span>Enable hardware acceleration and reload to try again.</span><button id="reload">Reload</button></div>
+  </main>
+  <section id="desktop-fallback" aria-labelledby="fallback-title">
+    <svg viewBox="0 0 80 64" aria-hidden="true"><rect x="8" y="6" width="64" height="42" rx="3"/><path d="M40 48v10M26 59h28"/></svg>
+    <h1 id="fallback-title">Use a computer to enter.</h1><p>This experience is designed for a desktop or laptop.<br />Open this website on your computer to continue.</p><span class="fallback-brand">ACM–VIT</span>
+  </section>
+  <script type="module" src="/src/main.js"></script>
+</body>
 </html>

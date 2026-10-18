@@ -1,7 +1,7 @@
 import * as T from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { buildConsole, buildController } from '../src/models.js';
+import { buildConsole, buildController } from './console-models.mjs';
 
 const white = new T.MeshStandardMaterial({ color: 0xe9e7df, roughness: .36 });
 const interior = new T.MeshStandardMaterial({ color: 0xd8d6cd, roughness: .8 });
@@ -118,8 +118,7 @@ export function createRoom() {
   const hub = new T.Mesh(new T.RingGeometry(.052, .096, 48), mat(0x8b939b, .12)); hub.position.z = .012; disc.add(hub);
 
   const lightMaterial = new T.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, depthWrite: false });
-  for (const [side, x, y, width, height] of [['left', -5.6, 8.4, 6, 10], ['right', 5.6, 8.4, 6, 10], ['top', 0, 11.7, 15, 5], ['bottom', 0, 5, 15, 5]]) {
-    plane(root, `ambilight-${side}`, width, height, [x, y, -1.69], lightMaterial.clone());
-  }
+  const halos=[...[-5.65,5.65].flatMap(x=>[10.6,8.4,6.2].map(y=>[x,y,6,4.8])),...[11.7,5.0].flatMap(y=>[-4,0,4].map(x=>[x,y,6.7,5]))];
+  halos.forEach(([x,y,width,height],index)=>plane(root,`ambilight-${index}`,width,height,[x,y,-1.69],lightMaterial.clone()));
   return root;
 }

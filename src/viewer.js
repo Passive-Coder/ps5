@@ -1,332 +1,160 @@
-import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import * as T from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { HorizontalBlurShader } from 'three/addons/shaders/HorizontalBlurShader.js';
-import { VerticalBlurShader } from 'three/addons/shaders/VerticalBlurShader.js';
-import { buildConsole, buildController, CONSOLES, disposeModel } from './models.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { TelevisionScreen, MENU_RECTS, drawPS } from './screen.js';
 
-export class StudioViewer {
-  constructor(canvas, viewport) {
-    this.canvas = canvas;
-    this.viewport = viewport;
-    this.reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    this.variant = 'pro';
-    this.orientation = 'vertical';
-    this.theme = 'light';
-    this.scene = new THREE.Scene();
-    this.camera = new THREE.PerspectiveCamera(30, 1, 0.1, 100);
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, preserveDrawingBuffer: true, powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    this.renderer.setClearColor(0xf6f6f3, 0);
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.22;
+const clamp = T.MathUtils.clamp;
+const ease = t => {t=clamp(t,0,1);return t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;};
 
-    const pmrem = new THREE.PMREMGenerator(this.renderer);
-    const room = new RoomEnvironment();
-    this.environment = pmrem.fromScene(room, 0.04);
-    this.scene.environment = this.environment.texture;
-    this.scene.environmentIntensity = 0.65;
-    room.dispose();
-    pmrem.dispose();
+async function loadRoom() {
+  const response=await fetch('/assets/room.wasm');
+  if(!response.ok)throw new Error(`Room asset returned ${response.status}`);
+  const {instance}=await WebAssembly.instantiateStreaming(response);
+  const {memory,model_ptr,model_size}=instance.exports;
+  const bytes=memory.buffer.slice(model_ptr(),model_ptr()+model_size());
+  const decoder=new DRACOLoader().setDecoderPath('/draco/').setWorkerLimit(2);
+  const loader=new GLTFLoader().setDRACOLoader(decoder);
+  try{return (await loader.parseAsync(bytes,'/assets/')).scene;}
+  finally{decoder.dispose();}
+}
 
-    this.controls = new OrbitControls(this.camera, canvas);
-    this.controls.enableDamping = true;
-    this.controls.dampingFactor = 0.065;
-    this.controls.enablePan = false;
-    this.controls.minDistance = 4.0;
-    this.controls.maxDistance = 26;
-    this.controls.minPolarAngle = 0.08;
-    this.controls.maxPolarAngle = Math.PI / 2 + 0.04;
-    this.controls.autoRotateSpeed = 0.65;
-    this.controls.rotateSpeed = 0.6;
-    this.controls.zoomSpeed = 0.7;
-    this.controls.addEventListener('start', () => { this.transition = null; });
-
-    this.setupLights();
-    this.setupGround();
-    this.console = buildConsole('pro');
-    this.controller = buildController();
-    this.scene.add(this.console, this.controller);
-    this.setLayout(false);
-    this.resize();
-    this.resetView(false);
-    this.resizeObserver = new ResizeObserver(() => this.resize());
-    this.resizeObserver.observe(viewport);
-    this.clock = new THREE.Timer();
-    this.frame = this.frame.bind(this);
-    this.renderer.setAnimationLoop(this.frame);
-    canvas.addEventListener('keydown', event => this.onKey(event));
-    canvas.addEventListener('webglcontextlost', event => {
-      event.preventDefault();
-      this.renderer.setAnimationLoop(null);
-      viewport.dispatchEvent(new CustomEvent('viewer-error', { detail: 'The graphics connection was interrupted. Reload the studio to reconnect.' }));
-    });
-    document.addEventListener('visibilitychange', () => {
-      this.renderer.setAnimationLoop(document.hidden ? null : this.frame);
-      this.clock.reset();
-    });
+export class RoomExperience {
+  static async create(canvas,onPhase) {
+    const [root,screen]=await Promise.all([loadRoom(),TelevisionScreen.create()]);
+    return new RoomExperience(canvas,root,screen,onPhase);
   }
-
+  constructor(canvas,root,screen,onPhase) {
+    this.canvas=canvas;this.root=root;this.screen=screen;this.onPhase=onPhase;this.time=0;this.previous=0;
+    this.reducedMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
+    this.scene=new T.Scene();this.scene.background=new T.Color(0xc1beb3);this.scene.add(root);
+    this.camera=new T.PerspectiveCamera(34,innerWidth/innerHeight,.05,150);
+    this.renderer=new T.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio,1.75));
+    this.renderer.toneMapping=T.ACESFilmicToneMapping;this.renderer.toneMappingExposure=1.12;
+    this.renderer.shadowMap.enabled=true;this.renderer.shadowMap.type=T.PCFShadowMap;
+    const pmrem=new T.PMREMGenerator(this.renderer),room=new RoomEnvironment();
+    this.environment=pmrem.fromScene(room,.04);this.scene.environment=this.environment.texture;this.scene.environmentIntensity=.23;room.dispose();pmrem.dispose();
+    this.ps5=root.getObjectByName('ps5');this.tv=root.getObjectByName('television');this.tvScreen=root.getObjectByName('tv-screen');
+    this.cabinet=root.getObjectByName('cabinet');this.controller=root.getObjectByName('controller');this.gameCase=root.getObjectByName('game-case');this.disc=root.getObjectByName('disc');
+    if(!this.ps5||!this.tvScreen||!this.disc)throw new Error('Required room meshes are missing');
+    this.powerMesh=root.getObjectByName('power-button');this.restDisc=this.disc.position.clone();this.hoverPosition=this.restDisc.clone().add(new T.Vector3(1.35,.32,.22));
+    this.discOut=0;this.discTarget=0;this.lights=[];this.leds=[];this.ambilight=[];
+    root.traverse(object=>{
+      if(!object.isMesh)return;
+      object.castShadow=true;object.receiveShadow=true;
+      if(object.name.startsWith('console-light')){object.material=object.material.clone();object.material.color.set(0x080c12);object.material.emissive=new T.Color(0x2e69ff);object.material.emissiveIntensity=0;this.leds.push(object);}
+      if(object.name.startsWith('ambilight-')){object.castShadow=false;object.receiveShadow=false;object.material=this.haloMaterial();this.ambilight.push(object);}
+    });
+    this.powerMesh.material=this.powerMesh.material.clone();
+    this.tvScreen.material=new T.MeshBasicMaterial({map:screen.texture,color:0xffffff,toneMapped:false});
+    this.tvScreen.castShadow=false;
+    root.getObjectByName('case-art').material=new T.MeshStandardMaterial({map:screen.caseTexture(),roughness:.4,emissive:0xffffff,emissiveIntensity:.10});
+    root.getObjectByName('disc-art').material=new T.MeshStandardMaterial({map:screen.discTexture(),metalness:.6,roughness:.26,side:T.DoubleSide});
+    this.applyMarks();this.setupLights();
+    this.composer=new EffectComposer(this.renderer);this.composer.addPass(new RenderPass(this.scene,this.camera));
+    this.bloom=new UnrealBloomPass(new T.Vector2(innerWidth,innerHeight),.23,.65,1.8);this.composer.addPass(this.bloom);this.composer.addPass(new OutputPass());
+    this.closePosition=new T.Vector3(-5.70,6.65,9.10);this.closeTarget=new T.Vector3(-7.25,6.03,.43);
+    this.camera.position.copy(this.closePosition);this.lookTarget=this.closeTarget.clone();this.camera.lookAt(this.lookTarget);
+    this.tv.visible=false;this.controller.visible=false;this.gameCase.visible=false;this.disc.visible=false;
+    for(const child of this.cabinet.children)child.visible=child.name==='worktop';
+    this.dom={power:document.querySelector('#power-control'),gameCase:document.querySelector('#case-control'),disc:document.querySelector('#disc-control'),menu:document.querySelector('#aoi-menu')};
+    this.frame=this.frame.bind(this);this.resize=this.resize.bind(this);this.resize();addEventListener('resize',this.resize);
+    this.setPhase('off');this.renderer.setAnimationLoop(this.frame);
+    canvas.addEventListener('webglcontextlost',event=>{event.preventDefault();this.setActive(false);document.querySelector('#error').hidden=false;});
+  }
+  haloMaterial() {
+    return new T.ShaderMaterial({transparent:true,depthWrite:false,uniforms:{color:{value:new T.Color()},strength:{value:0}},vertexShader:'varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}',fragmentShader:'varying vec2 vUv;uniform vec3 color;uniform float strength;void main(){vec2 p=(vUv-.5)*2.;float a=exp(-dot(p,p)*3.2)*strength;gl_FragColor=vec4(color,a);}',side:T.DoubleSide});
+  }
+  applyMarks() {
+    const canvas=document.createElement('canvas');canvas.width=canvas.height=256;drawPS(canvas.getContext('2d'),128,128,220,'#11151b');const texture=new T.CanvasTexture(canvas);texture.colorSpace=T.SRGBColorSpace;
+    this.root.traverse(object=>{if(object.name.startsWith('playstation-mark')){object.material=new T.MeshBasicMaterial({map:texture,transparent:true,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-2});object.castShadow=false;}});
+  }
   setupLights() {
-    this.ambient = new THREE.HemisphereLight(0xf2f6ff, 0xa0a09a, 2.0);
-    this.scene.add(this.ambient);
-    this.key = new THREE.DirectionalLight(0xfffaf1, 4.2);
-    this.key.position.set(-3, 7, 5);
-    this.scene.add(this.key);
-    this.fill = new THREE.DirectionalLight(0xe8efff, 2.0);
-    this.fill.position.set(5, 4, 3);
-    this.scene.add(this.fill);
-    this.rim = new THREE.DirectionalLight(0xffffff, 3);
-    this.rim.position.set(2, 6, -5);
-    this.scene.add(this.rim);
+    this.ambient=new T.HemisphereLight(0xd6e4ff,0x7c6c55,1.1);this.scene.add(this.ambient);
+    this.key=new T.DirectionalLight(0xffe9cd,2.7);this.key.position.set(-7,17,11);this.key.castShadow=true;
+    this.key.shadow.mapSize.set(2048,2048);Object.assign(this.key.shadow.camera,{left:-13,right:13,top:15,bottom:-8,near:.1,far:45});this.key.shadow.normalBias=.025;this.key.shadow.bias=-.0003;this.scene.add(this.key);
+    this.fill=new T.DirectionalLight(0xdae8ff,1);this.fill.position.set(8,12,8);this.scene.add(this.fill);
+    this.consoleGlow=new T.PointLight(0x2a6fff,0,5,2);this.consoleGlow.position.set(-7.3,6,1.9);this.scene.add(this.consoleGlow);
+    for(const halo of this.ambilight){const light=new T.PointLight(0x8ea7ff,0,8,1.5);light.position.copy(halo.position);light.position.z=-.95;this.scene.add(light);this.lights.push(light);}
+    this.screenFill=new T.PointLight(0x9cc4ee,0,19,1.5);this.screenFill.position.set(0,8,1.2);this.scene.add(this.screenFill);
   }
-
-  setupGround() {
-    const size = 512;
-    this.shadowTarget = new THREE.WebGLRenderTarget(size, size);
-    this.blurTarget = new THREE.WebGLRenderTarget(size, size);
-    this.shadowCamera = new THREE.OrthographicCamera(-6, 6, 4, -4, 0.001, 6);
-    this.shadowCamera.position.set(0, -0.02, 0);
-    this.shadowCamera.up.set(0, 0, -1);
-    this.shadowCamera.lookAt(0, 1, 0);
-    this.shadowMaterial = new THREE.ShaderMaterial({
-      vertexShader: 'varying float vHeight; void main() { vec4 worldPosition = modelMatrix * vec4(position, 1.0); vHeight = max(worldPosition.y, 0.0); gl_Position = projectionMatrix * viewMatrix * worldPosition; }',
-      fragmentShader: 'varying float vHeight; void main() { gl_FragColor = vec4(0.08, 0.09, 0.11, exp(-vHeight * 3.4) * 0.48); }',
-      side: THREE.DoubleSide,
-    });
-    this.ground = new THREE.Mesh(new THREE.PlaneGeometry(12, 8), new THREE.MeshBasicMaterial({ map: this.shadowTarget.texture, transparent: true, depthWrite: false, toneMapped: false, opacity: 0.7 }));
-    this.ground.rotation.x = -Math.PI / 2;
-    this.ground.scale.x = -1;
-    this.ground.material.side = THREE.DoubleSide;
-    this.ground.position.y = -0.01;
-    this.scene.add(this.ground);
-    this.blurScene = new THREE.Scene();
-    this.blurCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-    this.horizontalBlur = new THREE.ShaderMaterial({ ...HorizontalBlurShader, uniforms: THREE.UniformsUtils.clone(HorizontalBlurShader.uniforms), depthTest: false, depthWrite: false });
-    this.verticalBlur = new THREE.ShaderMaterial({ ...VerticalBlurShader, uniforms: THREE.UniformsUtils.clone(VerticalBlurShader.uniforms), depthTest: false, depthWrite: false });
-    this.blurQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.horizontalBlur);
-    this.blurScene.add(this.blurQuad);
-    this.shadowDirty = true;
+  setPhase(phase) {
+    this.phase=phase;this.phaseStart=this.time;this.onPhase(phase);
+    this.dom.power.hidden=phase!=='off';this.dom.gameCase.hidden=phase!=='ready';this.dom.disc.hidden=true;this.dom.menu.hidden=phase!=='home';
   }
-
-  updateGround() {
-    const previousTarget = this.renderer.getRenderTarget();
-    const previousClear = this.renderer.getClearColor(new THREE.Color());
-    const previousAlpha = this.renderer.getClearAlpha();
-    const previousBackground = this.scene.background;
-    this.ground.visible = false;
-    this.scene.background = null;
-    this.scene.overrideMaterial = this.shadowMaterial;
-    this.renderer.setClearColor(0x000000, 0);
-    this.renderer.setRenderTarget(this.shadowTarget);
-    this.renderer.render(this.scene, this.shadowCamera);
-    this.scene.overrideMaterial = null;
-    this.scene.background = previousBackground;
-    this.ground.visible = true;
-    this.horizontalBlur.uniforms.tDiffuse.value = this.shadowTarget.texture;
-    this.horizontalBlur.uniforms.h.value = 2.2 / 512;
-    this.blurQuad.material = this.horizontalBlur;
-    this.renderer.setRenderTarget(this.blurTarget);
-    this.renderer.render(this.blurScene, this.blurCamera);
-    this.verticalBlur.uniforms.tDiffuse.value = this.blurTarget.texture;
-    this.verticalBlur.uniforms.v.value = 2.2 / 512;
-    this.blurQuad.material = this.verticalBlur;
-    this.renderer.setRenderTarget(this.shadowTarget);
-    this.renderer.render(this.blurScene, this.blurCamera);
-    this.renderer.setRenderTarget(previousTarget);
-    this.renderer.setClearColor(previousClear, previousAlpha);
-    this.shadowDirty = false;
+  powerOn() {
+    if(this.phase!=='off')return;
+    this.setPhase('boot');this.tv.visible=true;this.controller.visible=true;this.gameCase.visible=true;this.disc.visible=true;
+    for(const child of this.cabinet.children)child.visible=true;
   }
-
-  layoutTarget() {
-    const c = CONSOLES[this.variant];
-    const horizontal = this.orientation === 'horizontal';
-    return {
-      consolePosition: new THREE.Vector3(horizontal ? -0.40 : -0.45, horizontal ? c.width / 2 + (c.disc ? 0.26 : 0.13) : c.height / 2 + 0.09, 0),
-      consoleRotation: new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, horizontal ? -Math.PI / 2 : 0)),
-      controllerPosition: new THREE.Vector3(horizontal ? 2.65 : 1.22, 0.69, horizontal ? 0.45 : 0.80),
-    };
+  hoverDisc(out) {if(this.phase==='ready')this.discTarget=out?1:0;}
+  insertDisc() {
+    if(this.phase!=='ready'||this.discOut<.15)return;
+    this.root.updateMatrixWorld(true);
+    this.flightStart=this.disc.position.clone();this.flightRotation=this.disc.quaternion.clone();
+    this.approach=this.ps5.localToWorld(new T.Vector3(.49,-1.053,1.98));
+    this.inserted=this.ps5.localToWorld(new T.Vector3(.49,-1.053,.43));
+    this.discRotation=this.ps5.quaternion.clone().multiply(new T.Quaternion().setFromAxisAngle(new T.Vector3(0,1,0),Math.PI/2));
+    this.flight=new T.CubicBezierCurve3(this.flightStart,this.flightStart.clone().add(new T.Vector3(-1,2.3,2.1)),this.approach.clone().add(new T.Vector3(1,1.4,1)),this.approach);
+    this.setPhase('inserting');
   }
-
-  setLayout(animate = true) {
-    const target = this.layoutTarget();
-    this.console.userData.stand.visible = this.orientation === 'vertical';
-    this.controller.rotation.set(-0.14, this.variant === 'pro' && this.orientation === 'vertical' ? -0.50 : 0.50, -0.025);
-    if (animate && !this.reducedMotion) {
-      this.objectTransition = { start: performance.now(), fromPosition: this.console.position.clone(), fromRotation: this.console.quaternion.clone(), fromController: this.controller.position.clone(), ...target };
-    } else {
-      this.console.position.copy(target.consolePosition);
-      this.console.quaternion.copy(target.consoleRotation);
-      this.controller.position.copy(target.controllerPosition);
-      this.objectTransition = null;
-    }
-    this.shadowDirty = true;
-  }
-
-  setModel(variant) {
-    if (!CONSOLES[variant] || variant === this.variant) return;
-    this.scene.remove(this.console);
-    disposeModel(this.console);
-    this.variant = variant;
-    this.console = buildConsole(variant);
-    this.scene.add(this.console);
-    this.setLayout(false);
-    this.resetView();
-  }
-
-  setOrientation(orientation) {
-    if (!['vertical', 'horizontal'].includes(orientation) || this.orientation === orientation) return;
-    this.orientation = orientation;
-    this.setLayout();
-    this.resetView();
-  }
-
-  setController(visible) {
-    this.controller.visible = visible;
-    this.shadowDirty = true;
-    this.resetView();
-  }
-
-  setTheme(theme) {
-    this.theme = theme;
-    const dark = theme === 'dark';
-    this.ambient.intensity = dark ? 0.8 : 2.0;
-    this.key.intensity = dark ? 3.8 : 4.2;
-    this.fill.intensity = dark ? 1.6 : 2.0;
-    this.rim.intensity = dark ? 5 : 3;
-    this.rim.color.set(dark ? 0x9cb9ff : 0xffffff);
-    this.scene.environmentIntensity = dark ? 0.34 : 0.65;
-    this.ground.material.opacity = dark ? 0.9 : 0.7;
-    this.renderer.toneMappingExposure = dark ? 0.95 : 1.22;
-  }
-
-  layoutBounds() {
-    const target = this.layoutTarget();
-    const position = this.console.position.clone();
-    const rotation = this.console.quaternion.clone();
-    const controllerPosition = this.controller.position.clone();
-    this.console.position.copy(target.consolePosition);
-    this.console.quaternion.copy(target.consoleRotation);
-    this.controller.position.copy(target.controllerPosition);
-    this.console.updateMatrixWorld(true);
-    this.controller.updateMatrixWorld(true);
-    const bounds = new THREE.Box3();
-    for (const root of [this.console, this.controller]) {
-      root.traverseVisible(object => {
-        if (object.isMesh) bounds.expandByObject(object);
-      });
-    }
-    this.console.position.copy(position);
-    this.console.quaternion.copy(rotation);
-    this.controller.position.copy(controllerPosition);
-    this.console.updateMatrixWorld(true);
-    this.controller.updateMatrixWorld(true);
-    return bounds;
-  }
-
-  resetView(animate = true) {
-    const horizontal = this.orientation === 'horizontal';
-    const aspect = Math.max(0.3, this.viewport.clientWidth / this.viewport.clientHeight);
-    const bounds = this.layoutBounds();
-    const target = bounds.getCenter(new THREE.Vector3());
-    const direction = horizontal ? new THREE.Vector3(4.5, 4.2, 7.5).normalize() : new THREE.Vector3(this.variant === 'pro' ? -7.2 : 7.2, 2.7, 7.5).normalize();
-    const right = new THREE.Vector3().crossVectors(this.camera.up, direction).normalize();
-    const up = new THREE.Vector3().crossVectors(direction, right).normalize();
-    const halfFov = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
-    let distance = 0;
-    for (const x of [bounds.min.x, bounds.max.x]) {
-      for (const y of [bounds.min.y, bounds.max.y]) {
-        for (const z of [bounds.min.z, bounds.max.z]) {
-          const offset = new THREE.Vector3(x, y, z).sub(target);
-          distance = Math.max(distance, Math.abs(offset.dot(up)) / halfFov + offset.dot(direction), Math.abs(offset.dot(right)) / (halfFov * aspect) + offset.dot(direction));
-        }
-      }
-    }
-    const position = target.clone().addScaledVector(direction, distance * 1.16);
-    if (animate && !this.reducedMotion) {
-      this.transition = { start: performance.now(), fromPosition: this.camera.position.clone(), fromTarget: this.controls.target.clone(), position, target };
-    } else {
-      this.camera.position.copy(position);
-      this.controls.target.copy(target);
-      this.transition = null;
-      this.controls.update();
-    }
-    this.canvas.setAttribute('aria-label', `${CONSOLES[this.variant].name} 3D model in ${this.orientation} position. Drag to orbit, scroll to zoom. Use arrow keys to rotate and plus or minus to zoom.`);
-  }
-
+  selectAOI(index) {if(this.phase==='home'&&index>=0&&index<4)this.screen.select(index,this.time);}
+  setActive(active) {this.previous=0;this.renderer.setAnimationLoop(active?this.frame:null);if(active)this.resize();}
   resize() {
-    const width = this.viewport.clientWidth;
-    const height = this.viewport.clientHeight;
-    if (!width || !height) return;
-    this.renderer.setSize(width, height, false);
-    this.camera.aspect = width / height;
-    this.camera.updateProjectionMatrix();
-    if (this.lastWidth && (this.lastWidth !== width || this.lastHeight !== height)) this.resetView(false);
-    this.lastWidth = width;
-    this.lastHeight = height;
+    this.width=innerWidth;this.height=innerHeight;this.camera.aspect=this.width/this.height;this.camera.updateProjectionMatrix();
+    this.renderer.setSize(this.width,this.height,false);this.composer.setSize(this.width,this.height);
+    const verticalSize=Math.max(12.15,19.6/this.camera.aspect),distance=verticalSize/(2*Math.tan(T.MathUtils.degToRad(17)));
+    this.widePosition=new T.Vector3(0,6.55,distance);this.wideTarget=new T.Vector3(0,5.9,0);
+    if(this.phase&&this.phase!=='off'&&this.phase!=='boot'){this.camera.position.copy(this.widePosition);this.lookTarget.copy(this.wideTarget);this.camera.lookAt(this.lookTarget);}
   }
-
-  onKey(event) {
-    const offset = this.camera.position.clone().sub(this.controls.target);
-    const spherical = new THREE.Spherical().setFromVector3(offset);
-    const keys = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', '+', '=', '-', '0'];
-    if (!keys.includes(event.key)) return;
-    event.preventDefault();
-    this.transition = null;
-    if (event.key === '0') return this.resetView();
-    if (event.key === 'ArrowLeft') spherical.theta -= 0.1;
-    if (event.key === 'ArrowRight') spherical.theta += 0.1;
-    if (event.key === 'ArrowUp') spherical.phi -= 0.08;
-    if (event.key === 'ArrowDown') spherical.phi += 0.08;
-    if (event.key === '+' || event.key === '=') spherical.radius *= 0.9;
-    if (event.key === '-') spherical.radius *= 1.1;
-    spherical.radius = THREE.MathUtils.clamp(spherical.radius, this.controls.minDistance, this.controls.maxDistance);
-    spherical.phi = THREE.MathUtils.clamp(spherical.phi, this.controls.minPolarAngle, this.controls.maxPolarAngle);
-    this.camera.position.copy(this.controls.target).add(new THREE.Vector3().setFromSpherical(spherical));
-    this.controls.update();
+  projected(point) {const p=point.clone().project(this.camera);return {x:(p.x*.5+.5)*this.width,y:(-.5*p.y+.5)*this.height};}
+  placeObject(element,object,padding=0) {
+    const bounds=new T.Box3().setFromObject(object),points=[];
+    for(const x of [bounds.min.x,bounds.max.x])for(const y of [bounds.min.y,bounds.max.y])for(const z of [bounds.min.z,bounds.max.z])points.push(this.projected(new T.Vector3(x,y,z)));
+    const left=Math.min(...points.map(p=>p.x))-padding,top=Math.min(...points.map(p=>p.y))-padding;
+    element.style.left=`${left}px`;element.style.top=`${top}px`;element.style.width=`${Math.max(...points.map(p=>p.x))-left+padding}px`;element.style.height=`${Math.max(...points.map(p=>p.y))-top+padding}px`;
   }
-
-  async saveImage() {
-    const oldBackground = this.scene.background;
-    try {
-      this.scene.background = new THREE.Color(this.theme === 'dark' ? '#171b22' : '#f6f6f3');
-      this.renderer.render(this.scene, this.camera);
-      const blob = await new Promise((resolve, reject) => this.canvas.toBlob(value => value ? resolve(value) : reject(new Error('Image export failed')), 'image/png'));
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.download = `${this.variant === 'original' ? 'ps5' : `ps5-${this.variant}`}-${this.orientation}.png`;
-      link.href = url;
-      link.click();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-    } finally {
-      this.scene.background = oldBackground;
-    }
+  screenPoint(x,y) {return this.projected(this.tvScreen.localToWorld(new T.Vector3((x/1920-.5)*11.59,(.5-y/1080)*6.5194,.012)));}
+  updateControls() {
+    this.root.updateMatrixWorld(true);
+    if(this.phase==='off'){const p=this.projected(this.powerMesh.getWorldPosition(new T.Vector3()));this.dom.power.style.left=`${p.x}px`;this.dom.power.style.top=`${p.y}px`;}
+    if(this.phase==='ready'){this.placeObject(this.dom.gameCase,this.gameCase,6);this.dom.disc.hidden=this.discOut<.75;if(!this.dom.disc.hidden){this.placeObject(this.dom.disc,this.disc,5);if(document.activeElement===this.dom.gameCase)this.dom.disc.focus({preventScroll:true});}}
+    if(this.phase==='home')MENU_RECTS.forEach((r,index)=>{const a=this.screenPoint(r.x,r.y),b=this.screenPoint(r.x+r.width,r.y+r.height),button=this.dom.menu.children[index];button.style.left=`${a.x}px`;button.style.top=`${a.y}px`;button.style.width=`${b.x-a.x}px`;button.style.height=`${b.y-a.y}px`;});
   }
-
-  frame() {
-    this.clock.update();
-    const now = performance.now();
-    const easing = t => 1 - Math.pow(1 - Math.min(t, 1), 3);
-    if (this.transition) {
-      const t = (now - this.transition.start) / 800;
-      const a = easing(t);
-      this.camera.position.lerpVectors(this.transition.fromPosition, this.transition.position, a);
-      this.controls.target.lerpVectors(this.transition.fromTarget, this.transition.target, a);
-      if (t >= 1) this.transition = null;
+  frame(timestamp) {
+    const delta=this.previous?Math.min((timestamp-this.previous)/1000,.06):0;this.previous=timestamp;this.time+=delta;
+    const elapsed=this.time-this.phaseStart;
+    if(this.phase==='boot'){
+      const duration=this.reducedMotion?1.6:5.2,t=ease((elapsed-.8)/(duration-.8));
+      this.camera.position.lerpVectors(this.closePosition,this.widePosition,t);this.lookTarget.lerpVectors(this.closeTarget,this.wideTarget,t);this.camera.lookAt(this.lookTarget);
+      if(elapsed>duration)this.setPhase('ready');
     }
-    if (this.objectTransition) {
-      const t = (now - this.objectTransition.start) / 800;
-      const a = easing(t);
-      const transition = this.objectTransition;
-      this.console.position.lerpVectors(transition.fromPosition, transition.consolePosition, a);
-      this.console.position.y += Math.sin(Math.PI * a) * 0.45;
-      this.console.quaternion.slerpQuaternions(transition.fromRotation, transition.consoleRotation, a);
-      this.controller.position.lerpVectors(transition.fromController, transition.controllerPosition, a);
-      this.shadowDirty = true;
-      if (t >= 1) this.objectTransition = null;
+    if(this.phase!=='off'){
+      const on=clamp(this.time*.9,0,1),white=clamp((this.time-3)/2,0,1),ledColor=new T.Color(0x286fff).lerp(new T.Color(0xc6e3ff),white*.65);
+      this.leds.forEach(led=>{led.material.emissive.copy(ledColor);led.material.emissiveIntensity=(8+Math.sin(this.time*5)*.35)*on;});
+      this.powerMesh.material.emissive.set(0x8ac5ff);this.powerMesh.material.emissiveIntensity=5*on;this.consoleGlow.intensity=2.2*on;
+      const night=this.phase==='home'||this.phase==='loading';
+      this.ambient.intensity=T.MathUtils.damp(this.ambient.intensity,night?.18:.9,1,delta);this.key.intensity=T.MathUtils.damp(this.key.intensity,night?.35:2.0,1,delta);this.fill.intensity=T.MathUtils.damp(this.fill.intensity,night?.16:.85,1,delta);this.scene.environmentIntensity=T.MathUtils.damp(this.scene.environmentIntensity,night?.10:.23,1,delta);
+      this.screenFill.intensity=T.MathUtils.damp(this.screenFill.intensity,night?8:2,1,delta);
     }
-    this.controls.update(Math.min(this.clock.getDelta(), 0.05));
-    if (this.shadowDirty) this.updateGround();
-    this.renderer.render(this.scene, this.camera);
+    if(this.phase==='ready'){
+      this.discOut=T.MathUtils.damp(this.discOut,this.discTarget,7,delta);this.disc.position.lerpVectors(this.restDisc,this.hoverPosition,this.discOut);this.disc.rotation.set(0,-this.discOut*.18,this.discOut*Math.sin(this.time*.8)*.05);
+    }
+    if(this.phase==='inserting'){
+      const fly=this.reducedMotion?.6:1.9,slide=this.reducedMotion?.4:1.2;
+      if(elapsed<fly){const p=ease(elapsed/fly);this.disc.position.copy(this.flight.getPoint(p));this.disc.quaternion.slerpQuaternions(this.flightRotation,this.discRotation,p);}
+      else{const p=ease((elapsed-fly)/slide);this.disc.position.lerpVectors(this.approach,this.inserted,p);this.disc.quaternion.copy(this.discRotation);}
+      if(elapsed>fly+slide){this.disc.visible=false;this.setPhase('loading');}
+    }
+    if(this.phase==='loading'&&elapsed>1.7)this.setPhase('home');
+    if(this.screen.update(this.phase,this.time,this.time-this.phaseStart)){
+      this.ambilight.forEach((halo,index)=>{const color=this.screen.colors[index];halo.material.uniforms.color.value.copy(color);halo.material.uniforms.strength.value=this.phase==='off'?0:this.phase==='home'||this.phase==='loading'?.90:.15;this.lights[index].color.copy(color);this.lights[index].intensity=this.phase==='off'?0:this.phase==='home'?4:1;});
+    }
+    this.updateControls();this.composer.render();
   }
 }
