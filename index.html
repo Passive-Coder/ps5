@@ -1,26 +1,70 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="theme-color" content="#080a0d" />
-  <meta name="description" content="Power on. Insert the disc. Enter the ACM–VIT Cyberpunk experience." />
-  <title>ACM–VIT · Cyberpunk</title><link rel="icon" href="/assets/acm.png" />
-</head>
-<body>
-  <main id="experience" hidden>
-    <canvas id="scene" aria-label="A PlayStation 5 beside a television and white media cabinet"></canvas>
-    <div id="loading" role="status"><span class="loading-line"></span><span>LOADING</span></div>
-    <button id="power-control" class="power-control" aria-label="Turn on the PlayStation 5" hidden><span class="power-dot"></span><span class="power-label">POWER ON</span></button>
-    <button id="case-control" class="object-control" aria-label="Cyberpunk 2077 game case: hover to remove the disc" hidden></button>
-    <button id="disc-control" class="object-control disc-control" aria-label="Insert the Cyberpunk 2077 disc into the PS5" hidden></button>
-    <nav id="aoi-menu" aria-label="Areas of interest" hidden><button data-aoi="0" aria-pressed="true">App</button><button data-aoi="1" aria-pressed="false">Web</button><button data-aoi="2" aria-pressed="false">FOSS</button><button data-aoi="3" aria-pressed="false">DevOps</button></nav>
-    <p id="scene-status" class="sr-only" role="status" aria-live="polite"></p>
-    <div id="error" hidden><p>The scene could not load.</p><span>Enable hardware acceleration and reload to try again.</span><button id="reload">Reload</button></div>
-  </main>
-  <section id="desktop-fallback" aria-labelledby="fallback-title">
-    <svg viewBox="0 0 80 64" aria-hidden="true"><rect x="8" y="6" width="64" height="42" rx="3"/><path d="M40 48v10M26 59h28"/></svg>
-    <h1 id="fallback-title">Use a computer to enter.</h1><p>This experience is designed for a desktop or laptop.<br />Open this website on your computer to continue.</p><span class="fallback-brand">ACM–VIT</span>
-  </section>
-  <script type="module" src="/src/main.js"></script>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#080a0d" />
+    <meta
+      name="description"
+      content="Power on. Insert the disc. Enter the ACM–VIT Cyberpunk experience."
+    />
+    <title>ACM–VIT · Cyberpunk</title>
+    <link rel="icon" href="/assets/acm.png" />
+  </head>
+  <body>
+    <main id="experience" hidden>
+      <canvas
+        id="scene"
+        aria-label="A PlayStation 5 beside a television and white media cabinet"
+      ></canvas>
+      <div id="loading" role="status">
+        <span class="loading-line"></span><span>LOADING</span>
+      </div>
+      <button
+        id="power-control"
+        class="power-control"
+        aria-label="Turn on the PlayStation 5"
+        hidden
+      >
+        <span class="power-dot"></span><span class="power-label">POWER ON</span>
+      </button>
+      <button
+        id="case-control"
+        class="object-control"
+        aria-label="Cyberpunk 2077 game case: hover to remove the disc"
+        hidden
+      ></button>
+      <button
+        id="disc-control"
+        class="object-control disc-control"
+        aria-label="Insert the Cyberpunk 2077 disc into the PS5"
+        hidden
+      ></button>
+      <nav id="aoi-menu" aria-label="Areas of interest" hidden>
+        <button data-aoi="0" aria-pressed="true">App</button
+        ><button data-aoi="1" aria-pressed="false">Web</button
+        ><button data-aoi="2" aria-pressed="false">FOSS</button
+        ><button data-aoi="3" aria-pressed="false">DevOps</button>
+      </nav>
+      <p id="scene-status" class="sr-only" role="status" aria-live="polite"></p>
+      <div id="error" hidden>
+        <p>The scene could not load.</p>
+        <span>Enable hardware acceleration and reload to try again.</span
+        ><button id="reload">Reload</button>
+      </div>
+    </main>
+    <section id="desktop-fallback" aria-labelledby="fallback-title">
+      <svg viewBox="0 0 80 64" aria-hidden="true">
+        <rect x="8" y="6" width="64" height="42" rx="3" />
+        <path d="M40 48v10M26 59h28" />
+      </svg>
+      <h1 id="fallback-title">Use a computer to enter.</h1>
+      <p>
+        This experience is designed for a desktop or laptop.<br />Open this
+        website on your computer to continue.
+      </p>
+      <span class="fallback-brand">ACM–VIT</span>
+    </section>
+    <script type="module" src="/src/main.js"></script>
+  </body>
 </html>
