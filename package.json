@@ -6,7 +6,6 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "models": "node scripts/build-models.mjs",
-    "prebuild": "npm run models",
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1"
   },

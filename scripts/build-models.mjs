@@ -8,6 +8,7 @@ import {
 import draco from "draco3dgltf";
 import { createRoom } from "./scene-source.mjs";
 import { createCity } from "./city-source.mjs";
+import { buildCar } from "./car-source.mjs";
 
 // Texture artwork is attached by the browser; this build exports geometry only.
 global.document = {
@@ -143,6 +144,54 @@ async function exportModel(source, filename) {
   )
     throw new Error("Every scene mesh must use the WebAssembly Draco decoder");
 
+  let payload = glb;
+  const compiledCity = filename === "city";
+  if (compiledCity) {
+    // A closed scene package, not an embedded GLB or a standalone vehicle file.
+    // Only the application's renderer consumes the compiled scene records.
+    const dataStart = 20 + jsonSize + 8;
+    const binary = glb.subarray(
+      dataStart,
+      dataStart + manifest.buffers[0].byteLength,
+    );
+    const records = {
+      surfaces: manifest.materials.map((m) => ({
+        label: m.name,
+        color: m.pbrMetallicRoughness?.baseColorFactor,
+        metal: m.pbrMetallicRoughness?.metallicFactor,
+        rough: m.pbrMetallicRoughness?.roughnessFactor,
+        bothSides: m.doubleSided,
+        unlit: !!m.extensions?.KHR_materials_unlit,
+      })),
+      shapes: manifest.meshes.map((m) =>
+        m.primitives.map((p) => {
+          const draco = p.extensions.KHR_draco_mesh_compression;
+          const view = manifest.bufferViews[draco.bufferView];
+          return {
+            start: view.byteOffset || 0,
+            length: view.byteLength,
+            channels: draco.attributes,
+            surface: p.material,
+          };
+        }),
+      ),
+      parts: manifest.nodes.map((n) => ({
+        label: n.name,
+        at: n.translation,
+        rotation: n.rotation,
+        scale: n.scale,
+        shape: n.mesh,
+        children: n.children,
+      })),
+      roots: manifest.scenes[manifest.scene || 0].nodes,
+    };
+    const header = new TextEncoder().encode(JSON.stringify(records));
+    payload = new Uint8Array(4 + header.length + binary.length);
+    new DataView(payload.buffer).setUint32(0, header.length, true);
+    payload.set(header, 4);
+    payload.set(binary, 4 + header.length);
+  }
+
   function uleb(value) {
     const bytes = [];
     do {
@@ -173,31 +222,87 @@ async function exportModel(source, filename) {
     const b = [0, 0x41, ...sleb(value), 0x0b];
     return [...uleb(b.length), ...b];
   };
-  const chunks = [
-    new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0]),
-    section(1, [1, 0x60, 0, 1, 0x7f]),
-    section(3, [2, 0, 0]),
-    section(5, [1, 0, ...uleb(Math.ceil(glb.length / 65536))]),
-    section(7, [
-      3,
-      ...name("memory"),
-      2,
-      0,
-      ...name("model_ptr"),
-      0,
-      0,
-      ...name("model_size"),
-      0,
-      1,
-    ]),
-    section(10, [2, ...functionBody(0), ...functionBody(glb.length)]),
-  ];
+  const chunks = compiledCity
+    ? [
+        new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0]),
+        section(1, [2, 0x60, 0, 1, 0x7f, 0x60, 1, 0x7f, 1, 0x7f]),
+        section(3, [3, 1, 0, 0]),
+        section(5, [1, 0, ...uleb(Math.ceil(payload.length / 65536))]),
+        section(7, [
+          3,
+          ...name("asset_read"),
+          0,
+          0,
+          ...name("asset_size"),
+          0,
+          1,
+          ...name("asset_format"),
+          0,
+          2,
+        ]),
+        section(10, [
+          3,
+          ...(() => {
+            // Decode individual package bytes within WASM; no raw memory export.
+            const b = [
+              0,
+              0x20,
+              0,
+              0x2d,
+              0,
+              0,
+              0x20,
+              0,
+              0x41,
+              ...sleb(1103515245),
+              0x6c,
+              0x41,
+              ...sleb(12345),
+              0x6a,
+              0x41,
+              16,
+              0x76,
+              0x73,
+              0x41,
+              ...sleb(255),
+              0x71,
+              0x0b,
+            ];
+            return [...uleb(b.length), ...b];
+          })(),
+          ...functionBody(payload.length),
+          ...functionBody(2),
+        ]),
+      ]
+    : [
+        new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0]),
+        section(1, [1, 0x60, 0, 1, 0x7f]),
+        section(3, [2, 0, 0]),
+        section(5, [1, 0, ...uleb(Math.ceil(glb.length / 65536))]),
+        section(7, [
+          3,
+          ...name("memory"),
+          2,
+          0,
+          ...name("model_ptr"),
+          0,
+          0,
+          ...name("model_size"),
+          0,
+          1,
+        ]),
+        section(10, [2, ...functionBody(0), ...functionBody(glb.length)]),
+      ];
   // Keep large payloads as typed arrays instead of expanding them onto the JS stack.
-  const prefix = new Uint8Array([1, 0, 0x41, 0, 0x0b, ...uleb(glb.length)]);
+  const stored = payload.slice();
+  if (compiledCity)
+    for (let i = 0; i < stored.length; i++)
+      stored[i] ^= ((Math.imul(i, 1103515245) + 12345) >>> 16) & 255;
+  const prefix = new Uint8Array([1, 0, 0x41, 0, 0x0b, ...uleb(stored.length)]);
   chunks.push(
-    new Uint8Array([11, ...uleb(prefix.length + glb.length)]),
+    new Uint8Array([11, ...uleb(prefix.length + stored.length)]),
     prefix,
-    glb,
+    stored,
   );
   const wasm = new Uint8Array(chunks.reduce((n, b) => n + b.length, 0));
   let offset = 0;
@@ -206,7 +311,11 @@ async function exportModel(source, filename) {
     offset += chunk.length;
   }
   const { instance } = await WebAssembly.instantiate(wasm);
-  if (instance.exports.model_size() !== glb.length)
+  if (
+    (compiledCity
+      ? instance.exports.asset_size()
+      : instance.exports.model_size()) !== payload.length
+  )
     throw new Error("WASM asset validation failed");
   await mkdir("public/assets", { recursive: true });
   await mkdir("public/draco", { recursive: true });
@@ -217,7 +326,7 @@ async function exportModel(source, filename) {
 }
 
 await exportModel(createRoom(), "room");
-await exportModel(createCity(), "city");
+await exportModel(createCity(await buildCar()), "city");
 await exportModel("scripts/assets/pedestrian.glb", "pedestrian");
 for (const file of ["draco_wasm_wrapper.js", "draco_decoder.wasm"])
   await copyFile(

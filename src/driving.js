@@ -92,10 +92,11 @@ export class DrivingGame {
       c.fillRect(0, 0, w, h);
     });
     this.scene.fog = new T.Fog(0xe3ddcb, 48, 270);
-    this.scene.environment = environment;
+    this.scene.environment = assets.environment.texture;
     this.scene.environmentIntensity = 0.65;
-    this.scene.add(new T.HemisphereLight(0xbcd0d6, 0x8a7d64, 2.1));
-    this.sun = new T.DirectionalLight(0xfff0d5, 5.2);
+    this.scene.environmentRotation.y = -1.1;
+    this.scene.add(new T.HemisphereLight(0xc0d2d8, 0x776849, 1.35));
+    this.sun = new T.DirectionalLight(0xffebc7, 5.8);
     this.sun.position.set(55, 70, -75);
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(4096, 4096);
@@ -185,7 +186,7 @@ export class DrivingGame {
         phase: i * 1.3,
         x: i === 0 ? 10.65 : 11.2 + (i % 3) * 1.1,
         z: i === 0 ? 1 : -8 - i * 13,
-        direction: i % 4 === 3 ? -1 : 1,
+        direction: i === 0 || i % 4 === 3 ? -1 : 1,
       });
     }
     this.car = root.getObjectByName("player-car");
@@ -250,7 +251,7 @@ export class DrivingGame {
     const before = this.state.distance;
     this.state.update(delta);
     for (const person of this.people) {
-      const d = -person.z + this.time * 0.08 * person.direction;
+      const d = -person.z + Math.sin(this.time * 0.12 + person.phase) * 0.35;
       person.root.position.set(person.x + roadX(d) - DRIVE_LANE_X, 0.26, -d);
       person.root.rotation.y =
         (person.direction > 0 ? Math.PI : 0) + roadHeading(d);
@@ -268,7 +269,7 @@ export class DrivingGame {
     this.car.rotation.y = roadHeading(this.state.distance);
     for (const wheel of this.wheels)
       wheel.rotation.x -=
-        (this.state.distance - before) / (0.43 * this.car.scale.y);
+        (this.state.distance - before) / (0.36 * this.car.scale.y);
     const distance = this.state.distance;
     this.camera.position.set(roadX(distance - 8.4) + 5.1, 2.65, 8.4 - distance);
     this.camera.lookAt(roadX(distance + 14) - 1.35, 2.12, -14 - distance);

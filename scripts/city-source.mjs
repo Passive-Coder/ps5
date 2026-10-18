@@ -9,7 +9,6 @@ import {
   patch,
   bake,
 } from "./geometry.mjs";
-import { buildCar } from "./car-source.mjs";
 import { DRIVE_LANE_X, roadOffset } from "../src/checkpoints.js";
 
 const concrete = [0x8a887a, 0x656b69, 0x999383, 0x596368, 0x77766b].map(
@@ -18,17 +17,13 @@ const concrete = [0x8a887a, 0x656b69, 0x999383, 0x596368, 0x77766b].map(
 const steel = material("painted-steel", 0x354347, 0.67, 0.55);
 const dark = material("dark-metal", 0x182326, 0.6, 0.55);
 const glass = material("city-glass", 0x2b4c53, 0.22, 0.72);
-const window = material("window-light", 0x929b91, 0.47, 0.35);
 const yellow = material("road-yellow", 0xc5a642, 0.8);
 const railBlue = material("cladding-blue-rail", 0x345b6b, 0.67, 0.3);
 const white = material("road-white", 0xbeb9a2, 0.86);
 const red = material("tail-light", 0xee3531, 0.2);
 const rubber = material("rubber", 0x101719, 0.95);
 const chrome = material("alloy", 0x74817f, 0.24, 0.88);
-const teal = material("car-paint", 0x086974, 0.26, 0.62);
 const carGlass = material("car-glass", 0x132526, 0.1, 0.85);
-const leaf = material("palm-leaf", 0x526341, 0.95);
-leaf.side = T.DoubleSide;
 let seed = 8301;
 function random() {
   seed = (seed * 1664525 + 1013904223) >>> 0;
@@ -57,50 +52,105 @@ function sign(parent, id, w, h, x, y, z, rotation = 0) {
   return p;
 }
 function palm(parent, x, z, height = 8) {
-  const trunk = material("palm-trunk", 0x6b6350);
-  rod(parent, [x, 0, z], [x + 0.4, height, z], 0.14, trunk);
-  for (let i = 0; i < 14; i++) {
-    const angle = (i * Math.PI * 2) / 14,
-      length = 3.2 + random() * 1.4;
-    const positions = [],
-      indices = [];
-    for (let j = 0; j <= 10; j++) {
-      const t = j / 10,
-        a = angle + Math.sin(t * 3) * 0.15;
-      const mid = new T.Vector3(
-        x + 0.4 + Math.cos(a) * t * length,
-        height + Math.sin(t * Math.PI) * 0.8 - t * 0.7,
-        z + Math.sin(a) * t * length,
+  const g = group(parent, "date-palm");
+  const bark = material("palm-bark", 0x70634b, 0.96);
+  const oldLeaf = material("palm-dry-leaf", 0x7d7950, 0.98);
+  const leafMats = [0x65724c, 0x526745, 0x6c784e, 0x7a7e52].map((c) =>
+    material("palm-leaf", c, 0.89),
+  );
+  leafMats.forEach((m) => (m.side = T.DoubleSide));
+  for (let j = 0; j < 18; j++) {
+    const y0 = (height * j) / 18,
+      y1 = (height * (j + 1)) / 18;
+    const lean = (t) => 0.6 * (t / height) ** 2;
+    rod(
+      g,
+      [x + lean(y0), y0, z],
+      [x + lean(y1), y1, z],
+      0.16 * (1 - j / 45),
+      bark,
+      "curved-palm-trunk",
+    );
+  }
+  for (let y = 0.3; y < height; y += 0.19) {
+    const ring = mesh(
+      g,
+      "trunk-leaf-scar",
+      new T.TorusGeometry(0.145 * (1 - (y / height) * 0.4), 0.016, 4, 10),
+      oldLeaf,
+      [x + 0.6 * (y / height) ** 2, y, z],
+    );
+    ring.rotation.x = Math.PI / 2;
+  }
+  for (let i = 0; i < 19; i++) {
+    const angle = i * 2.39996,
+      length = 3.3 + random() * 1.1;
+    const points = [];
+    const point = (t) =>
+      new T.Vector3(
+        x + 0.6 + Math.cos(angle) * length * t,
+        height + Math.sin(t * Math.PI) * 1.1 - t * t * 1.45 + (i % 3) * 0.17,
+        z + Math.sin(angle) * length * t,
       );
-      const half = 0.22 * Math.sin(t * Math.PI) + 0.008;
-      positions.push(
-        mid.x + Math.sin(a) * half,
-        mid.y,
-        mid.z - Math.cos(a) * half,
-        mid.x - Math.sin(a) * half,
-        mid.y,
-        mid.z + Math.cos(a) * half,
+    for (let j = 0; j <= 18; j++) points.push(point(j / 18));
+    for (let j = 0; j < 18; j++)
+      rod(
+        g,
+        points[j].toArray(),
+        points[j + 1].toArray(),
+        0.018,
+        oldLeaf,
+        "frond-rib",
       );
-      if (j < 10) {
-        const k = j * 2;
-        indices.push(k, k + 1, k + 2, k + 1, k + 3, k + 2);
+    for (let j = 2; j < 18; j++) {
+      const t = j / 18,
+        mid = point(t),
+        len = 0.72 * Math.sin(Math.PI * t) ** 0.65;
+      for (const side of [-1, 1]) {
+        const spread = angle + side * 1.1;
+        const tip = mid
+          .clone()
+          .add(
+            new T.Vector3(
+              Math.cos(spread) * len,
+              -0.16 - t * 0.16,
+              Math.sin(spread) * len,
+            ),
+          );
+        const along = new T.Vector3(
+          Math.cos(angle) * 0.09,
+          0.015,
+          Math.sin(angle) * 0.09,
+        );
+        const geo = new T.BufferGeometry();
+        geo.setAttribute(
+          "position",
+          new T.Float32BufferAttribute(
+            [
+              ...mid.clone().sub(along).toArray(),
+              ...mid.clone().add(along).toArray(),
+              ...tip.toArray(),
+              ...mid
+                .clone()
+                .add(tip)
+                .multiplyScalar(0.5)
+                .add(new T.Vector3(0, 0.045, 0))
+                .toArray(),
+            ],
+            3,
+          ),
+        );
+        geo.setAttribute(
+          "uv",
+          new T.Float32BufferAttribute([0, 0, 1, 0, 0.5, 1, 0.5, 0.5], 2),
+        );
+        geo.setIndex([0, 1, 3, 1, 2, 3, 2, 0, 3]);
+        geo.computeVertexNormals();
+        mesh(g, "pinnate-leaflet", geo, leafMats[(i + j) % 4]);
       }
     }
-    const geo = new T.BufferGeometry();
-    geo.setAttribute("position", new T.Float32BufferAttribute(positions, 3));
-    geo.setAttribute(
-      "uv",
-      new T.Float32BufferAttribute(
-        Array(22)
-          .fill(0)
-          .flatMap((_, j) => [j % 2, Math.floor(j / 2) / 10]),
-        2,
-      ),
-    );
-    geo.setIndex(indices);
-    geo.computeVertexNormals();
-    mesh(parent, "palm-frond", geo, leaf);
   }
+  bake(g);
 }
 function building(parent, x, z, w, d, h, index) {
   const g = group(parent, `city-block-${index}`);
@@ -393,204 +443,187 @@ function building(parent, x, z, w, d, h, index) {
   }
   bake(g);
 }
-function facadeBlock(parent, name, x, z, width, depth, height, atlas) {
+function industrialElevation(
+  parent,
+  width,
+  height,
+  x,
+  z,
+  rotation,
+  pale = false,
+) {
+  const g = group(parent, "industrial-elevation");
+  g.position.set(x, 0, z);
+  g.rotation.y = rotation;
+  const frame = material(
+    "cladding-megastructure-frame",
+    pale ? 0x9d9d8c : 0x435856,
+    0.71,
+    0.35,
+  );
+  const trim = material(
+    "cladding-megastructure-copper",
+    pale ? 0x8b9188 : 0x877552,
+    0.68,
+    0.45,
+  );
+  const panel = material(
+    "cladding-megastructure-panel",
+    pale ? 0x88978f : 0x294448,
+    0.74,
+    0.32,
+  );
+  const bays = Math.round(width / 7.5),
+    bay = width / bays;
+  for (let row = 0; row < Math.ceil(height / 17); row++) {
+    const base = row * 17,
+      bh = Math.min(17, height - base);
+    for (let col = 0; col < bays; col++) {
+      const cx = -width / 2 + bay * (col + 0.5);
+      box(
+        g,
+        "deep-inset",
+        [bay - 0.35, bh - 0.4, 0.14],
+        [cx, base + bh / 2, 0.08],
+        dark,
+      );
+      box(
+        g,
+        "layered-steel-bay",
+        [bay - 1.5, bh - 2, 0.24],
+        [cx, base + bh / 2, 0.22],
+        panel,
+      );
+      for (const edge of [-1, 1]) {
+        box(
+          g,
+          "main-frame",
+          [0.55, bh, 0.95],
+          [cx + edge * (bay / 2 - 0.28), base + bh / 2, 0.48],
+          frame,
+          0.06,
+        );
+        box(
+          g,
+          "copper-edge",
+          [0.12, bh - 0.8, 0.13],
+          [cx + edge * (bay / 2 - 0.58), base + bh / 2, 1.01],
+          trim,
+        );
+        box(
+          g,
+          "inner-bay-frame",
+          [0.16, bh - 1.7, 0.28],
+          [cx + edge * (bay / 2 - 1), base + bh / 2, 0.48],
+          steel,
+        );
+      }
+      box(
+        g,
+        "bay-head",
+        [bay, 0.65, 1.25],
+        [cx, base + bh - 0.32, 0.5],
+        trim,
+        0.05,
+      );
+      box(g, "bay-sill", [bay, 0.42, 1.35], [cx, base + 0.21, 0.55], frame);
+      for (let y = base + 1.5; y < base + bh - 1; y += 0.7) {
+        box(
+          g,
+          "thin-industrial-slat",
+          [bay - 2, 0.075, 0.18],
+          [cx, y, 0.53],
+          frame,
+        );
+        for (const side of [-1, 1])
+          box(
+            g,
+            "inset-glass-strip",
+            [bay * 0.28, 0.3, 0.035],
+            [cx + side * bay * 0.17, y + 0.26, 0.365],
+            glass,
+          );
+      }
+      for (let i = 0; i < 3; i++) {
+        box(
+          g,
+          "small-service-cabinet",
+          [0.7, 1.3, 0.38],
+          [cx - bay * 0.25 + i * 0.8, base + 1.3, 0.7],
+          steel,
+        );
+        for (let j = 0; j < 5; j++)
+          box(
+            g,
+            "cabinet-louvre",
+            [0.5, 0.045, 0.045],
+            [cx - bay * 0.25 + i * 0.8, base + 0.9 + j * 0.15, 0.91],
+            dark,
+          );
+      }
+    }
+    box(
+      g,
+      "transfer-slab",
+      [width + 0.8, 0.55, 1.55],
+      [0, base + 0.3, 0.55],
+      frame,
+    );
+  }
+  // Brackets under the projecting crowns give the upper silhouette its deep
+  // diagonal supports, visible against the bright skyline in the reference.
+  for (let y = 34; y < height; y += 34) {
+    box(g, "projecting-crown", [width + 1.8, 2, 3.8], [0, y + 1, 1.25], frame);
+    for (let x = -width / 2 + 1; x < width / 2; x += bay) {
+      rod(g, [x, y - 6, 0.3], [x, y, 2.7], 0.28, trim, "crown-brace");
+      box(g, "crown-inlay", [0.2, 5.8, 0.12], [x + 0.35, y - 2.7, 0.95], trim);
+    }
+  }
+  return g;
+}
+function industrialStack(
+  parent,
+  name,
+  x,
+  z,
+  width,
+  depth,
+  height,
+  pale = false,
+) {
   const g = group(parent, name);
-  const inner = x + width / 2;
-  const facade = material(`reference-facade-${atlas}`, 0xffffff, 0.78, 0.15);
-  box(g, "industrial-mass", [width, height, depth], [x, height / 2, z], dark);
-  const side = mesh(
+  box(
     g,
-    "industrial-side-elevation",
-    new T.PlaneGeometry(depth, height),
-    facade,
-    [inner + 0.015, height / 2, z],
+    "structural-core",
+    [width, height, depth],
+    [0, height / 2, 0],
+    pale ? concrete[2] : dark,
   );
-  side.rotation.y = Math.PI / 2;
-  mesh(
-    g,
-    "industrial-front-elevation",
-    new T.PlaneGeometry(width, height),
-    facade,
-    [x, height / 2, z + depth / 2 + 0.015],
-  );
-  return { g, inner };
+  industrialElevation(g, width, height, 0, depth / 2 + 0.02, 0, pale);
+  industrialElevation(g, depth, height, width / 2 + 0.02, 0, Math.PI / 2, pale);
+  for (let y = 8; y < height; y += 17) {
+    box(g, "setback-floor", [width + 0.4, 0.28, depth + 0.4], [0, y, 0], steel);
+  }
+  for (const q of [-width * 0.3, width * 0.3]) {
+    rod(
+      g,
+      [q, 0, depth / 2 + 0.8],
+      [q, height - 4, depth / 2 + 0.8],
+      0.15,
+      steel,
+      "external-riser",
+    );
+    for (let y = 2; y < height; y += 3)
+      box(g, "riser-collar", [0.5, 0.12, 0.5], [q, y, depth / 2 + 0.8], chrome);
+  }
+  bake(g);
+  g.position.set(x, 0, z);
+  return g;
 }
 function referenceArchitecture(parent) {
-  // The near facade has large industrial bays, not repeating apartment windows.
-  const rust = material("cladding-industrial-rust", 0x886b43, 0.72, 0.4);
-  const frame = material("cladding-industrial-frame", 0x263b3e, 0.61, 0.5);
-  const { g: factory, inner } = facadeBlock(
-    parent,
-    "industrial-foreground",
-    -38,
-    -27,
-    28,
-    58,
-    44,
-    0,
-  );
-  for (const z of [-54, -40, -26, -12, 1]) {
-    box(
-      factory,
-      "industrial-primary-column",
-      [1.1, 42, 0.7],
-      [inner + 0.4, 21, z],
-      rust,
-    );
-    box(
-      factory,
-      "column-dark-reveal",
-      [0.2, 37, 0.18],
-      [inner + 1, 21, z + 0.39],
-      dark,
-    );
-    if (z < -4)
-      rod(factory, [inner + 0.7, 8, z], [inner + 0.7, 18, z + 9], 0.14, rust);
-  }
-  for (const y of [8, 19, 31, 43]) {
-    box(
-      factory,
-      "industrial-primary-transom",
-      [1.1, 0.7, 58],
-      [inner + 0.4, y, -27],
-      rust,
-    );
-    box(
-      factory,
-      "industrial-front-transom",
-      [28, 0.7, 1.1],
-      [-38, y, 2.3],
-      rust,
-    );
-  }
-  for (let y = 9; y < 30; y += 0.9)
-    for (const z of [-47, -19])
-      box(
-        factory,
-        "deep-metal-louvre",
-        [0.55, 0.09, 11.3],
-        [inner + 0.15, y, z],
-        frame,
-      );
-  for (const z of [-37, -9]) {
-    box(
-      factory,
-      "recessed-service-bay",
-      [0.08, 7.2, 5.8],
-      [inner + 0.12, 3.7, z],
-      dark,
-    );
-    for (let y = 1; y < 7; y += 0.38)
-      box(
-        factory,
-        "service-bay-slat",
-        [0.2, 0.09, 5.5],
-        [inner + 0.23, y, z],
-        frame,
-      );
-    const duct = cylinder(
-      factory,
-      "exterior-duct",
-      0.54,
-      0.54,
-      11,
-      [inner + 0.8, 23, z + 4.6],
-      steel,
-      24,
-    );
-    for (const y of [18, 22, 26])
-      box(
-        factory,
-        "duct-bracket",
-        [1.2, 0.13, 0.16],
-        [inner + 0.45, y, z + 4.6],
-        rust,
-      );
-  }
-  bake(factory);
-
-  const { g: tower, inner: edge } = facadeBlock(
-    parent,
-    "brutalist-superframe",
-    -40,
-    -104,
-    28,
-    36,
-    119,
-    1,
-  );
-  for (const z of [-121, -113, -104, -95, -87]) {
-    box(
-      tower,
-      "tower-vertical-rib",
-      [1.3, 119, 0.65],
-      [edge + 0.7, 59.5, z],
-      concrete[2],
-    );
-    box(
-      tower,
-      "rib-metal-inlay",
-      [0.13, 107, 0.13],
-      [edge + 1.38, 59, z + 0.38],
-      steel,
-    );
-  }
-  for (let y = 12; y < 120; y += 15) {
-    box(
-      tower,
-      "tower-transfer-slab",
-      [1.5, 0.85, 36],
-      [edge + 0.6, y, -104],
-      concrete[2],
-    );
-    box(
-      tower,
-      "tower-front-slab",
-      [28, 0.85, 1.5],
-      [-40, y, -85.5],
-      concrete[2],
-    );
-  }
-  for (const z of [-113, -95]) {
-    box(tower, "projecting-megablock", [4.3, 17, 10], [edge + 1, 89, z], steel);
-    for (let y = 82; y < 97; y += 0.8)
-      box(
-        tower,
-        "megatower-vent",
-        [0.13, 0.18, 8.8],
-        [edge + 3.22, y, z],
-        concrete[2],
-      );
-    rod(tower, [edge + 0.8, 72, z], [edge + 4, 81, z], 0.36, concrete[2]);
-  }
-  bake(tower);
-  const { g: distant, inner: farEdge } = facadeBlock(
-    parent,
-    "pale-skyline-crown",
-    -20,
-    -171,
-    21,
-    27,
-    133,
-    3,
-  );
-  for (let z = -184; z < -156; z += 4.5)
-    box(
-      distant,
-      "skyline-concrete-fin",
-      [1.8, 130, 0.45],
-      [farEdge + 0.4, 65, z],
-      concrete[2],
-    );
-  for (let y = 20; y < 132; y += 22)
-    box(
-      distant,
-      "skyline-cross-brace",
-      [1.6, 1.3, 27],
-      [farEdge + 0.5, y, -171],
-      concrete[2],
-    );
-  bake(distant);
+  industrialStack(parent, "industrial-foreground", -49, -31, 30, 52, 62);
+  industrialStack(parent, "brutalist-superframe", -39, -96, 28, 34, 120);
+  industrialStack(parent, "pale-skyline-crown", -24, -162, 24, 30, 137, true);
 }
 function bendDistrict(root) {
   root.updateMatrixWorld(true);
@@ -788,7 +821,7 @@ function van(parent, x, z, color = 0x8b8c80, id = 0) {
   bake(g);
   return g;
 }
-export function createCity() {
+export function createCity(car) {
   seed = 8301;
   const root = new T.Group();
   root.name = "night-city";
@@ -918,22 +951,6 @@ export function createCity() {
       [-7.6, -0.012, z + 11],
       material("asphalt-patch", 0x444944, 0.98),
     );
-    const bench = box(
-      street,
-      "bench",
-      [0.6, 0.25, 2],
-      [13.8, 0.72, z - 2],
-      steel,
-      0.04,
-    );
-    for (const dz of [-0.7, 0.7])
-      box(
-        street,
-        "bench-leg",
-        [0.4, 0.4, 0.07],
-        [13.8, 0.42, z - 2 + dz],
-        dark,
-      );
   }
   box(
     street,
@@ -1052,10 +1069,31 @@ export function createCity() {
     [30, -310, 24, 42, 108],
   ];
   blocks.forEach(([x, z, w, d, h], i) => {
-    if (i > 2) building(root, x, z, w, d, h, i);
+    if (i > 2 && i !== 7) building(root, x, z, w, d, h, i);
   });
+  const storefront = group(root, "shaded-storefront");
+  box(storefront, "storefront-mass", [17, 12, 43], [26, 6, -18], dark);
+  for (const y of [4.2, 8.5, 11.5])
+    box(storefront, "storefront-overhang", [21, 0.75, 44], [24, y, -18], steel);
+  for (let z = 1; z > -40; z -= 4) {
+    box(
+      storefront,
+      "shop-front-recess",
+      [0.08, 3.5, 3.4],
+      [17.45, 2.1, z],
+      carGlass,
+    );
+    box(
+      storefront,
+      "shop-front-pier",
+      [0.65, 8.6, 0.38],
+      [17.2, 4.3, z + 1.8],
+      steel,
+    );
+  }
+  bake(storefront);
   referenceArchitecture(root);
-  roundTower(root, -28, -73, 8, 84);
+  roundTower(root, -45, -80, 12, 87);
   sign(root, "hero-0", 5.4, 7.2, -15.9, 12.8, -46, 0.25);
   sign(root, "hero-1", 5.2, 7, -16.7, 14.2, -97, 0.3);
   sign(root, "militech", 8, 2.6, -22, 11.6, -57, 0.3);
@@ -1146,7 +1184,7 @@ export function createCity() {
   sign(root, "hotel", 4.6, 2.2, -15.4, 10.5, -5, Math.PI / 2);
   sign(root, "kiosk", 1.5, 2.7, 14.5, 1.75, -4.5);
   sign(root, "right-poster", 4.5, 7, 16, 13, -7, -0.25);
-  buildCar(root);
+  root.add(car);
   van(root, DRIVE_LANE_X - 5.4, -3.3, 0x929185, 0);
   van(root, -5.8, -25, 0x747c70, 1);
   van(root, DRIVE_LANE_X - 3.1, -44, 0x526c5f, 2).scale.set(1.3, 1.5, 1.3);

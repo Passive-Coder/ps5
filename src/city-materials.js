@@ -1,4 +1,5 @@
 import * as T from "three";
+import { HDRLoader } from "three/addons/loaders/HDRLoader.js";
 
 export function canvasTexture(width, height, draw) {
   const c = document.createElement("canvas");
@@ -12,6 +13,14 @@ export function canvasTexture(width, height, draw) {
 export async function loadCityMaterials(renderer) {
   const loader = new T.TextureLoader(),
     assets = {};
+  const hdr = await new HDRLoader().loadAsync(
+    "/assets/textures/industrial-sky.hdr",
+  );
+  hdr.mapping = T.EquirectangularReflectionMapping;
+  const pmrem = new T.PMREMGenerator(renderer);
+  assets.environment = pmrem.fromEquirectangular(hdr);
+  hdr.dispose();
+  pmrem.dispose();
   await Promise.all(
     ["asphalt_02", "concrete_layers_02", "concrete_floor_02"].map(
       async (name) => {
@@ -243,7 +252,15 @@ export function decorateCity(root, assets) {
         m.color.lerp(new T.Color(0xdfdfd2), 0.45);
       } else if (m.name === "pavement") {
         Object.assign(m, assets.concrete_floor_02);
-        m.color.set(0xd1cdc0);
+        const source = assets.concrete_floor_02.map.image;
+        m.map = canvasTexture(1024, 1024, (c, w, h) => {
+          c.fillStyle = "#e3dfd0";
+          c.fillRect(0, 0, w, h);
+          c.globalAlpha = 0.38;
+          c.drawImage(source, 0, 0, w, h);
+        });
+        m.map.wrapS = m.map.wrapT = T.RepeatWrapping;
+        m.color.set(0xe1dac6);
         m.roughness = 0.86;
         m.normalScale = new T.Vector2(0.07, 0.07);
       } else if (m.name.startsWith("reference-facade-")) {
@@ -270,6 +287,13 @@ export function decorateCity(root, assets) {
         m.color.set(index === 0 ? 0xa9b8b1 : 0xffffff);
         m.roughness = 0.78;
         m.metalness = 0.12;
+      } else if (m.name === "cladding-megastructure-panel") {
+        m.map = canvasTexture(512, 512, (c, w, h) =>
+          c.drawImage(assets.street, 32, 72, 88, 70, 0, 0, w, h),
+        );
+        m.map.wrapS = m.map.wrapT = T.RepeatWrapping;
+        m.color.set(0xb4bdb7);
+        m.roughness = 0.72;
       } else if (m.name.startsWith("cladding") || m.name === "painted-steel") {
         m.map = metalWear;
         m.roughness = 0.65;
@@ -283,7 +307,7 @@ export function decorateCity(root, assets) {
         m.map = windows[1];
         m.color.set(0x4f777c);
         m.roughness = 0.22;
-      } else if (m.name === "tail-light") {
+      } else if (m.name === "tail-light" || m.name === "car-taillight") {
         m.emissive = new T.Color(0xdf1731);
         m.emissiveIntensity = 1.4;
       } else if (m.name === "road-paint") {
@@ -312,10 +336,23 @@ export function decorateCity(root, assets) {
         m.emissive = new T.Color(0xb7d94a);
         m.emissiveIntensity = 0.7;
       } else if (m.name === "car-glass") {
-        m.color.set(0x18383b);
-        m.metalness = 0.68;
+        m.color.set(0x15292c);
+        m.metalness = 0.5;
         m.roughness = 0.15;
         m.envMapIntensity = 1.2;
+      } else if (m.name === "car-carbon") {
+        const weave = canvasTexture(128, 128, (c, w, h) => {
+          c.fillStyle = "#68716f";
+          c.fillRect(0, 0, w, h);
+          for (let y = 0; y < h; y += 4)
+            for (let x = 0; x < w; x += 4) {
+              c.fillStyle = (x + y) % 8 ? "#a7adaa" : "#414a4b";
+              c.fillRect(x, y, 3, 3);
+            }
+        });
+        weave.wrapS = weave.wrapT = T.RepeatWrapping;
+        weave.repeat.set(7, 7);
+        m.map = weave;
       } else if (m.name.startsWith("traffic-paint")) {
         m.map = metalWear;
         m.roughness = 0.49;
