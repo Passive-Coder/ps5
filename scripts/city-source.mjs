@@ -443,187 +443,246 @@ function building(parent, x, z, w, d, h, index) {
   }
   bake(g);
 }
-function industrialElevation(
-  parent,
-  width,
-  height,
-  x,
-  z,
-  rotation,
-  pale = false,
-) {
-  const g = group(parent, "industrial-elevation");
-  g.position.set(x, 0, z);
-  g.rotation.y = rotation;
-  const frame = material(
-    "cladding-megastructure-frame",
-    pale ? 0x9d9d8c : 0x435856,
-    0.71,
-    0.35,
-  );
-  const trim = material(
-    "cladding-megastructure-copper",
-    pale ? 0x8b9188 : 0x877552,
-    0.68,
-    0.45,
-  );
-  const panel = material(
-    "cladding-megastructure-panel",
-    pale ? 0x88978f : 0x294448,
-    0.74,
-    0.32,
-  );
-  const bays = Math.round(width / 7.5),
-    bay = width / bays;
-  for (let row = 0; row < Math.ceil(height / 17); row++) {
-    const base = row * 17,
-      bh = Math.min(17, height - base);
-    for (let col = 0; col < bays; col++) {
-      const cx = -width / 2 + bay * (col + 0.5);
-      box(
-        g,
-        "deep-inset",
-        [bay - 0.35, bh - 0.4, 0.14],
-        [cx, base + bh / 2, 0.08],
-        dark,
-      );
-      box(
-        g,
-        "layered-steel-bay",
-        [bay - 1.5, bh - 2, 0.24],
-        [cx, base + bh / 2, 0.22],
-        panel,
-      );
-      for (const edge of [-1, 1]) {
-        box(
-          g,
-          "main-frame",
-          [0.55, bh, 0.95],
-          [cx + edge * (bay / 2 - 0.28), base + bh / 2, 0.48],
-          frame,
-          0.06,
+function windowedOffice(parent) {
+  const g = group(parent, "green-windowed-office");
+  const green = material("cladding-office-green", 0x36584d, 0.75, 0.2);
+  const rust = material("cladding-office-rust", 0x986c48, 0.68, 0.32);
+  const glazing = material("reference-window-bay", 0xffffff, 0.37, 0.26);
+  box(g, "office-core", [70, 49, 12], [0, 24.5, 0], green);
+  for (const [width, x, z, rot] of [
+    [70, 0, 6.05, 0],
+    [12, 35.05, 0, Math.PI / 2],
+  ]) {
+    const face = group(g, "deep-windowed-elevation");
+    face.position.set(x, 0, z);
+    face.rotation.y = rot;
+    for (let bx = -width / 2 + 4; bx < width / 2; bx += 8) {
+      for (const y of [11, 28, 44]) {
+        box(face, "deep-window-reveal", [6.4, 11.7, 0.25], [bx, y, 0.12], dark);
+        mesh(
+          face,
+          "glazed-window-grid",
+          new T.PlaneGeometry(5.65, 10.8),
+          glazing,
+          [bx, y, 0.28],
         );
-        box(
-          g,
-          "copper-edge",
-          [0.12, bh - 0.8, 0.13],
-          [cx + edge * (bay / 2 - 0.58), base + bh / 2, 1.01],
-          trim,
-        );
-        box(
-          g,
-          "inner-bay-frame",
-          [0.16, bh - 1.7, 0.28],
-          [cx + edge * (bay / 2 - 1), base + bh / 2, 0.48],
-          steel,
-        );
-      }
-      box(
-        g,
-        "bay-head",
-        [bay, 0.65, 1.25],
-        [cx, base + bh - 0.32, 0.5],
-        trim,
-        0.05,
-      );
-      box(g, "bay-sill", [bay, 0.42, 1.35], [cx, base + 0.21, 0.55], frame);
-      for (let y = base + 1.5; y < base + bh - 1; y += 0.7) {
-        box(
-          g,
-          "thin-industrial-slat",
-          [bay - 2, 0.075, 0.18],
-          [cx, y, 0.53],
-          frame,
-        );
-        for (const side of [-1, 1])
+        for (const edge of [-1, 1]) {
           box(
-            g,
-            "inset-glass-strip",
-            [bay * 0.28, 0.3, 0.035],
-            [cx + side * bay * 0.17, y + 0.26, 0.365],
-            glass,
+            face,
+            "rust-window-jamb",
+            [0.5, 12.5, 0.8],
+            [bx + edge * 3.2, y, 0.45],
+            rust,
+            0.04,
+          );
+          box(
+            face,
+            "rust-window-header",
+            [6.8, 0.5, 0.8],
+            [bx, y + edge * 6, 0.45],
+            rust,
+            0.04,
+          );
+        }
+        for (let row = -5; row < 5.5; row += 1.35)
+          box(
+            face,
+            "projecting-window-transom",
+            [5.7, 0.06, 0.2],
+            [bx, y + row, 0.4],
+            steel,
+          );
+        for (let q = -2.2; q < 2.3; q += 1.1)
+          box(
+            face,
+            "window-mullion",
+            [0.055, 10.8, 0.16],
+            [bx + q, y, 0.38],
+            steel,
           );
       }
-      for (let i = 0; i < 3; i++) {
-        box(
-          g,
-          "small-service-cabinet",
-          [0.7, 1.3, 0.38],
-          [cx - bay * 0.25 + i * 0.8, base + 1.3, 0.7],
-          steel,
-        );
-        for (let j = 0; j < 5; j++)
+      for (const y of [3, 19.5, 36.5])
+        for (let j = 0; j < 6; j++)
           box(
-            g,
-            "cabinet-louvre",
-            [0.5, 0.045, 0.045],
-            [cx - bay * 0.25 + i * 0.8, base + 0.9 + j * 0.15, 0.91],
-            dark,
+            face,
+            "horizontal-service-louvre",
+            [6.2, 0.16, 0.4],
+            [bx, y + j * 0.35, 0.35],
+            steel,
           );
-      }
+      box(
+        face,
+        "deep-green-pilaster",
+        [0.8, 49, 1.2],
+        [bx + 3.8, 24.5, 0.55],
+        green,
+        0.07,
+      );
     }
-    box(
-      g,
-      "transfer-slab",
-      [width + 0.8, 0.55, 1.55],
-      [0, base + 0.3, 0.55],
-      frame,
-    );
-  }
-  // Brackets under the projecting crowns give the upper silhouette its deep
-  // diagonal supports, visible against the bright skyline in the reference.
-  for (let y = 34; y < height; y += 34) {
-    box(g, "projecting-crown", [width + 1.8, 2, 3.8], [0, y + 1, 1.25], frame);
-    for (let x = -width / 2 + 1; x < width / 2; x += bay) {
-      rod(g, [x, y - 6, 0.3], [x, y, 2.7], 0.28, trim, "crown-brace");
-      box(g, "crown-inlay", [0.2, 5.8, 0.12], [x + 0.35, y - 2.7, 0.95], trim);
-    }
-  }
-  return g;
-}
-function industrialStack(
-  parent,
-  name,
-  x,
-  z,
-  width,
-  depth,
-  height,
-  pale = false,
-) {
-  const g = group(parent, name);
-  box(
-    g,
-    "structural-core",
-    [width, height, depth],
-    [0, height / 2, 0],
-    pale ? concrete[2] : dark,
-  );
-  industrialElevation(g, width, height, 0, depth / 2 + 0.02, 0, pale);
-  industrialElevation(g, depth, height, width / 2 + 0.02, 0, Math.PI / 2, pale);
-  for (let y = 8; y < height; y += 17) {
-    box(g, "setback-floor", [width + 0.4, 0.28, depth + 0.4], [0, y, 0], steel);
-  }
-  for (const q of [-width * 0.3, width * 0.3]) {
-    rod(
-      g,
-      [q, 0, depth / 2 + 0.8],
-      [q, height - 4, depth / 2 + 0.8],
-      0.15,
-      steel,
-      "external-riser",
-    );
-    for (let y = 2; y < height; y += 3)
-      box(g, "riser-collar", [0.5, 0.12, 0.5], [q, y, depth / 2 + 0.8], chrome);
+    for (const y of [5, 21, 38, 49])
+      box(
+        face,
+        "office-projecting-cornice",
+        [width + 1, 0.65, 1.8],
+        [0, y, 0.65],
+        green,
+      );
   }
   bake(g);
-  g.position.set(x, 0, z);
-  return g;
+  g.position.set(-62, 0, -36);
+}
+function goldTowerElevation(parent, width, height, x, z, rotation) {
+  const face = group(parent, "flared-tower-bays");
+  face.position.set(x, 0, z);
+  face.rotation.y = rotation;
+  const gold = material("cladding-gold-structural-frame", 0xb39c73, 0.57, 0.55);
+  const panel = material("reference-tower-louvres", 0xffffff, 0.65, 0.3);
+  const bays = Math.round(width / 10.5),
+    bw = width / bays,
+    bottom = 16,
+    top = height - 2;
+  for (let i = 0; i < bays; i++) {
+    const cx = -width / 2 + bw * (i + 0.5);
+    const shape = new T.Shape();
+    shape.moveTo(cx - bw * 0.29, bottom);
+    shape.lineTo(cx + bw * 0.29, bottom);
+    shape.lineTo(cx + bw * 0.43, top - 8);
+    shape.lineTo(cx + bw * 0.49, top);
+    shape.lineTo(cx - bw * 0.49, top);
+    shape.lineTo(cx - bw * 0.43, top - 8);
+    shape.closePath();
+    const hole = new T.Path();
+    hole.moveTo(cx - bw * 0.22, bottom + 2);
+    hole.lineTo(cx - bw * 0.39, top - 2);
+    hole.lineTo(cx + bw * 0.39, top - 2);
+    hole.lineTo(cx + bw * 0.22, bottom + 2);
+    hole.closePath();
+    shape.holes.push(hole);
+    mesh(
+      face,
+      "flared-gold-megaframe",
+      new T.ExtrudeGeometry(shape, {
+        depth: 1.7,
+        bevelEnabled: true,
+        bevelSize: 0.09,
+        bevelThickness: 0.09,
+        bevelSegments: 2,
+        steps: 1,
+      }),
+      gold,
+      [0, 0, 0.35],
+    );
+    const geometry = new T.BufferGeometry();
+    geometry.setAttribute(
+      "position",
+      new T.Float32BufferAttribute(
+        [
+          cx - bw * 0.38,
+          top - 2,
+          0.4,
+          cx + bw * 0.38,
+          top - 2,
+          0.4,
+          cx - bw * 0.215,
+          bottom + 2,
+          0.4,
+          cx + bw * 0.215,
+          bottom + 2,
+          0.4,
+        ],
+        3,
+      ),
+    );
+    geometry.setAttribute(
+      "uv",
+      new T.Float32BufferAttribute([0, 1, 1, 1, 0, 0, 1, 0], 2),
+    );
+    geometry.setIndex([0, 2, 1, 1, 2, 3]);
+    geometry.computeVertexNormals();
+    mesh(face, "deep-louvered-trapezoid", geometry, panel);
+    for (let y = bottom + 3; y < top - 2; y += 1.25) {
+      const t = (y - bottom) / (top - bottom),
+        w = bw * (0.43 + t * 0.32);
+      box(
+        face,
+        "recessed-metal-floor-slat",
+        [w, 0.1, 0.14],
+        [cx, y, 0.55],
+        steel,
+      );
+    }
+    box(
+      face,
+      "tower-top-crown",
+      [bw + 0.25, 0.9, 3.5],
+      [cx, top + 1, 1.1],
+      gold,
+      0.06,
+    );
+    for (const edge of [-1, 1]) {
+      const a = new T.Vector3(cx + edge * bw * 0.3, bottom - 8, 0.2),
+        b = new T.Vector3(cx + edge * bw * 0.29, bottom + 2, 1.7);
+      const beam = box(
+        face,
+        "diagonal-podium-buttress",
+        [0.8, a.distanceTo(b), 1.2],
+        a.clone().add(b).multiplyScalar(0.5).toArray(),
+        gold,
+        0.05,
+      );
+      beam.quaternion.setFromUnitVectors(
+        new T.Vector3(0, 1, 0),
+        b.sub(a).normalize(),
+      );
+    }
+  }
+  for (let y = 3; y < 16; y += 3.2) {
+    box(face, "podium-glazing", [width, 0.85, 0.08], [0, y, 0.08], glass);
+    box(
+      face,
+      "podium-slab-edge",
+      [width + 0.8, 0.7, 1.3],
+      [0, y + 0.9, 0.4],
+      steel,
+    );
+    for (let q = -width / 2; q < width / 2; q += 1.2)
+      box(
+        face,
+        "podium-window-mullion",
+        [0.05, 0.9, 0.1],
+        [q, y, 0.16],
+        chrome,
+      );
+  }
 }
 function referenceArchitecture(parent) {
-  industrialStack(parent, "industrial-foreground", -65, -68, 64, 50, 70);
-  industrialStack(parent, "brutalist-superframe", -39, -96, 28, 34, 120);
-  industrialStack(parent, "pale-skyline-crown", -24, -162, 24, 30, 137, true);
+  windowedOffice(parent);
+  const tower = group(parent, "gold-braced-megatower");
+  box(
+    tower,
+    "megatower-core",
+    [42, 60, 34],
+    [0, 30, 0],
+    material("cladding-tower-blue-grey", 0x455456, 0.73, 0.3),
+  );
+  goldTowerElevation(tower, 42, 60, 0, 17.02, 0);
+  goldTowerElevation(tower, 34, 60, 21.02, 0, Math.PI / 2);
+  for (const y of [15, 58])
+    box(tower, "deep-transfer-floor", [44, 1, 36], [0, y, 0], steel);
+  bake(tower);
+  tower.position.set(-46, 0, -98);
+  const pale = group(parent, "pale-skyline-crown");
+  const grey = material("concrete-pale-crown", 0xa7a79b, 0.89);
+  box(pale, "concrete-crown-core", [27, 142, 32], [0, 71, 0], grey);
+  for (let q = -12; q <= 12; q += 4) {
+    box(pale, "vertical-dark-glazing", [2, 132, 0.09], [q, 66, 16.05], glass);
+    box(pale, "deep-concrete-fin", [0.7, 142, 1.5], [q + 1.4, 71, 16.5], grey);
+  }
+  for (let y = 8; y < 142; y += 8)
+    box(pale, "crown-horizontal-ribbon", [27, 0.8, 1.6], [0, y, 16.4], steel);
+  bake(pale);
+  pale.position.set(-19, 0, -170);
+  sign(parent, "nc-mark", 8, 12, -11, 75, -152);
 }
 function bendDistrict(root) {
   root.updateMatrixWorld(true);
@@ -660,7 +719,7 @@ function bendDistrict(root) {
     });
   }
 }
-function roundTower(parent, x, z, r, h) {
+function roundTower(parent, x, z, r, h, base = 0) {
   const g = group(parent, "rounded-corporate-tower");
   cylinder(
     g,
@@ -693,12 +752,27 @@ function roundTower(parent, x, z, r, h) {
     );
   }
   bake(g);
+  g.position.y = base;
 }
 function van(parent, x, z, color = 0x8b8c80, id = 0) {
   const g = group(parent, `traffic-${id}`);
   g.position.set(x, 0, z);
   const paint = material(`traffic-paint-${id}`, color, 0.66, 0.22);
-  box(g, "van-body", [2.12, 1.3, 4.5], [0, 1.55, 0], paint, 0.16);
+  const body = box(g, "van-body", [2.12, 1.3, 4.5], [0, 1.55, 0], paint, 0.16);
+  const bodyVertices = body.geometry.attributes.position;
+  for (let i = 0; i < bodyVertices.count; i++) {
+    const taper = T.MathUtils.clamp((bodyVertices.getY(i) + 0.1) / 0.75, 0, 1);
+    let depth = bodyVertices.getZ(i);
+    if (depth > 1.6) depth -= 0.5 * taper;
+    if (depth < -1.6) depth += 0.6 * taper;
+    bodyVertices.setXYZ(
+      i,
+      bodyVertices.getX(i) * (1 - 0.1 * taper),
+      bodyVertices.getY(i),
+      depth,
+    );
+  }
+  body.geometry.computeVertexNormals();
   // Open wheel arches expose the tyres instead of covering them with a solid box.
   for (const side of [-1, 1]) {
     const positions = [],
@@ -734,33 +808,52 @@ function van(parent, x, z, color = 0x8b8c80, id = 0) {
       paint,
       0.05,
     );
-  box(g, "van-roof", [2.03, 0.13, 3.9], [0, 2.22, 0.15], paint, 0.08);
+  box(g, "van-roof", [1.9, 0.13, 3.3], [0, 2.22, -0.04], paint, 0.06);
   box(g, "bumper", [2.14, 0.26, 0.2], [0, 0.56, 2.26], dark, 0.04);
+  patch(
+    g,
+    "sloping-rear-panel",
+    [
+      [1.01, 1.12, 2.27],
+      [-1.01, 1.12, 2.27],
+      [-0.91, 2.06, 1.84],
+      [0.91, 2.06, 1.84],
+    ],
+    paint,
+  );
   for (const side of [-1, 1]) {
-    box(
-      g,
-      "rear-window",
-      [0.83, 0.67, 0.025],
-      [side * 0.49, 1.79, 2.26],
-      carGlass,
-      0.05,
-    );
+    for (let vent = 0; vent < 5; vent++)
+      box(
+        g,
+        "rear-roof-vent",
+        [0.12, 0.025, 0.06],
+        [side * (0.37 + vent * 0.11), 2.09, 1.84],
+        dark,
+      );
     box(
       g,
       "brake-light",
       [0.86, 0.045, 0.04],
-      [side * 0.51, 1.08, 2.27],
+      [side * 0.51, 1.18, 2.27],
       red,
       0.015,
     );
     box(
       g,
-      "cab-window",
-      [0.04, 0.74, 0.84],
-      [side * 1.065, 1.75, -1.24],
-      carGlass,
-      0.04,
+      "vertical-tail-light",
+      [0.065, 0.28, 0.035],
+      [side * 0.95, 0.76, 2.27],
+      red,
+      0.015,
     );
+    const cabWindow = [
+      [side * 1.06, 1.48, -1.97],
+      [side * 1.06, 1.48, -0.82],
+      [side * 0.965, 2.04, -0.82],
+      [side * 0.965, 2.04, -1.62],
+    ];
+    if (side < 0) cabWindow.reverse();
+    patch(g, "cab-window", cabWindow, carGlass);
     for (const a of [-1.38, 1.4]) {
       const w = cylinder(
         g,
@@ -781,8 +874,8 @@ function van(parent, x, z, color = 0x8b8c80, id = 0) {
     [
       [-0.93, 1.45, -2.28],
       [0.93, 1.45, -2.28],
-      [0.89, 2.03, -2.19],
-      [-0.89, 2.03, -2.19],
+      [0.89, 2.03, -1.76],
+      [-0.89, 2.03, -1.76],
     ],
     carGlass,
   );
@@ -834,7 +927,84 @@ function van(parent, x, z, color = 0x8b8c80, id = 0) {
       hub.rotation.z = Math.PI / 2;
     }
   }
-  box(g, "door-seam", [0.02, 1.37, 0.025], [0, 1.4, 2.28], dark);
+  bake(g);
+  return g;
+}
+function constructionTruck(parent, x, z) {
+  const g = group(parent, "traffic-flatbed");
+  g.position.set(x, 0, z);
+  const paint = material("cladding-truck-container", 0x566a51, 0.78, 0.2);
+  box(g, "truck-chassis", [2.25, 0.28, 6.3], [0, 0.7, 0], dark);
+  box(g, "truck-flatbed", [2.4, 0.25, 4.1], [0, 1, 0.8], steel);
+  box(g, "green-container", [2.15, 2.15, 2.8], [0, 2.15, 0.1], paint, 0.06);
+  for (const side of [-1, 1]) {
+    for (let dz = -1.1; dz < 1.5; dz += 0.18)
+      box(
+        g,
+        "container-rib",
+        [0.055, 1.9, 0.045],
+        [side * 1.1, 2.15, dz],
+        paint,
+      );
+    box(
+      g,
+      "container-corner",
+      [0.09, 2.25, 0.09],
+      [side * 1.1, 2.15, 1.53],
+      steel,
+    );
+    box(
+      g,
+      "truck-mirror",
+      [0.16, 0.3, 0.21],
+      [side * 1.24, 2.15, -2.3],
+      dark,
+      0.025,
+    );
+    for (const axle of [-2.2, 0.85, 2.1]) {
+      const tyre = cylinder(
+        g,
+        "truck-tyre",
+        0.43,
+        0.43,
+        0.28,
+        [side * 1.07, 0.43, axle],
+        rubber,
+        24,
+      );
+      tyre.rotation.z = Math.PI / 2;
+      const hub = cylinder(
+        g,
+        "truck-hub",
+        0.25,
+        0.25,
+        0.29,
+        [side * 1.09, 0.43, axle],
+        chrome,
+        24,
+      );
+      hub.rotation.z = Math.PI / 2;
+    }
+    box(
+      g,
+      "rear-truck-lamp",
+      [0.3, 0.11, 0.04],
+      [side * 0.85, 0.83, 2.92],
+      red,
+    );
+  }
+  box(g, "truck-cab", [2.14, 1.65, 1.7], [0, 1.65, -2.18], paint, 0.1);
+  box(g, "cab-windscreen", [1.9, 0.66, 0.02], [0, 2.03, -3.05], carGlass, 0.03);
+  box(g, "truck-bumper", [2.35, 0.22, 0.19], [0, 0.61, 2.94], dark);
+  for (const side of [-1, 1])
+    box(
+      g,
+      "truck-cab-window",
+      [0.025, 0.6, 1.05],
+      [side * 1.08, 2.03, -2.25],
+      carGlass,
+      0.03,
+    );
   bake(g);
   return g;
 }
@@ -863,33 +1033,33 @@ export function createCity(car) {
       "sidewalk",
       new T.BoxGeometry(15, 0.32, 410, 1, 1, 205),
       material("pavement", 0xa49d8b, 0.96),
-      [x < 0 ? -21.6 : 16, 0.1, -150],
+      [x < 0 ? -21.6 : 17, 0.1, -150],
     );
     mesh(
       street,
       "curb",
       new T.BoxGeometry(0.25, 0.37, 410, 1, 1, 205),
       concrete[2],
-      [x < 0 ? -14 : 8.45, 0.12, -150],
+      [x < 0 ? -14 : 9.45, 0.12, -150],
     );
   }
   for (let z = 35; z > -350; z -= 5.4) {
     for (const x of [-8.5, -3, 3])
       box(street, "lane-marking", [0.1, 0.012, 2.8], [x, 0.001, z], white);
-    for (const x of [-13.6, 8])
+    for (const x of [-13.6, 9])
       box(street, "edge-line", [0.12, 0.014, 5.5], [x, 0.002, z], yellow);
-    box(street, "paving-joint", [6.9, 0.008, 0.024], [12, 0.267, z], steel);
-    box(street, "storm-drain", [0.55, 0.013, 1.2], [8.65, 0.275, z + 1], dark);
+    box(street, "paving-joint", [6.9, 0.008, 0.024], [13, 0.267, z], steel);
+    box(street, "storm-drain", [0.55, 0.013, 1.2], [9.65, 0.275, z + 1], dark);
     for (let j = 0; j < 5; j++)
       box(
         street,
         "drain-slat",
         [0.5, 0.025, 0.025],
-        [8.65, 0.29, z + 0.55 + j * 0.22],
+        [9.65, 0.29, z + 0.55 + j * 0.22],
         steel,
       );
     if (z % 2 < 1) {
-      for (const x of [-13.8, 8.6]) {
+      for (const x of [-13.8, 9.6]) {
         const rail =
           x > 0 ? material("cladding-road-rail", 0xa77e4b, 0.72, 0.35) : yellow;
         box(street, "rail-post", [0.075, 0.9, 0.075], [x, 0.73, z], rail);
@@ -914,13 +1084,13 @@ export function createCity(car) {
     }
   }
   for (const crossing of [-82, -160, -250, -320]) {
-    for (let x = -13; x < 8; x += 0.8)
+    for (let x = -13; x < 9; x += 0.8)
       box(street, "crosswalk", [0.43, 0.015, 3.8], [x, 0.009, crossing], white);
     box(
       street,
       "stop-line",
-      [21, 0.015, 0.17],
-      [-2.5, 0.01, crossing + 3],
+      [22, 0.015, 0.17],
+      [-2, 0.01, crossing + 3],
       white,
     );
   }
@@ -942,7 +1112,14 @@ export function createCity(car) {
     if (z % 30 === 0 && z < -15) palm(street, 13.7, z - 6, 7.8 + random() * 2);
     if (z < -15)
       box(street, "utility-box", [0.65, 1.1, 0.52], [14, 0.8, z], steel, 0.04);
-    box(street, "bollard", [0.16, 0.8, 0.16], [9.2, 0.65, z], yellow, 0.02);
+    box(street, "bollard", [0.16, 0.8, 0.16], [10.2, 0.65, z], dark, 0.02);
+    box(
+      street,
+      "bollard-reflector",
+      [0.165, 0.1, 0.165],
+      [10.2, 0.96, z],
+      yellow,
+    );
     // Animated pedestrian meshes are loaded from their own WASM asset.
   }
   for (const z of [-8, -63, -153, -250]) {
@@ -980,7 +1157,7 @@ export function createCity(car) {
     street,
     "foreground-drain-bed",
     [0.85, 0.025, 2],
-    [9.55, 0.278, -0.6],
+    [10.0, 0.278, -0.6],
     dark,
   );
   for (let i = 0; i < 15; i++)
@@ -988,7 +1165,7 @@ export function createCity(car) {
       street,
       "foreground-drain-grate",
       [0.8, 0.028, 0.027],
-      [9.55, 0.3, 0.3 - i * 0.13],
+      [10.0, 0.3, 0.3 - i * 0.13],
       steel,
     );
   const roadPanel = mesh(
@@ -1001,15 +1178,37 @@ export function createCity(car) {
   roadPanel.rotation.x = -Math.PI / 2;
   palm(street, -13.4, -48, 16);
   palm(street, -13.4, -110, 13);
-  // Chain-link fencing on the left, behind the roadside safety rail.
+  const lampOrange = material("cladding-lamp-orange", 0xb58b40, 0.63, 0.4);
+  rod(street, [-14, 0, -46], [-14, 8.4, -46], 0.085, steel);
+  for (const side of [-1, 1]) {
+    rod(
+      street,
+      [-14, 8.4, -46],
+      [-14 + side * 4.1, 8.65, -46],
+      0.06,
+      lampOrange,
+    );
+    box(
+      street,
+      "long-orange-light",
+      [4.8, 0.13, 0.38],
+      [-14 + side * 2.6, 8.67, -46],
+      lampOrange,
+    );
+    box(
+      street,
+      "light-diffuser",
+      [4.5, 0.025, 0.28],
+      [-14 + side * 2.6, 8.59, -46],
+      white,
+    );
+  }
+  // Dense horizontal security bars and angled spikes behind the roadside rail.
   for (let z = 5; z > -120; z -= 3) {
     rod(street, [-15, 0.3, z], [-15, 3.4, z], 0.035, chrome);
-    for (let y = 0.7; y < 3.4; y += 0.38)
+    for (let y = 0.7; y < 3.4; y += 0.28)
       rod(street, [-15, y, z], [-15, y, z - 3], 0.012, chrome);
-    for (let y = 0.3; y < 3; y += 0.65) {
-      rod(street, [-15, y, z], [-15, y + 0.65, z - 1.5], 0.009, steel);
-      rod(street, [-15, y + 0.65, z], [-15, y, z - 1.5], 0.009, steel);
-    }
+    rod(street, [-15, 3.4, z], [-14.7, 3.75, z], 0.022, chrome);
   }
   for (const [z, y] of [
     [-52, 14],
@@ -1017,9 +1216,19 @@ export function createCity(car) {
     [-216, 12],
   ]) {
     const g = group(root, `elevated-crossing-${-z}`);
-    box(g, "elevated-deck", [60, 0.65, 3.2], [-3, y, z], steel);
+    const pedestrianBridge = z === -113;
+    const bridgeFrame = pedestrianBridge
+      ? material("cladding-footbridge-orange", 0xb99151, 0.65, 0.3)
+      : steel;
+    box(g, "elevated-deck", [60, 0.65, 3.2], [-3, y, z], bridgeFrame);
     for (const x of [-19, 15]) {
-      box(g, "bridge-support", [0.7, y, 1], [x, y / 2, z], concrete[1]);
+      box(
+        g,
+        "bridge-support",
+        [pedestrianBridge ? 1.3 : 0.7, y, 1],
+        [x, y / 2, z],
+        concrete[1],
+      );
       for (const offset of [-1.2, 1.2])
         rod(
           g,
@@ -1035,11 +1244,38 @@ export function createCity(car) {
         "bridge-edge-beam",
         [60, 0.54, 0.18],
         [-3, y + 0.38, z + dz],
-        concrete[1],
+        pedestrianBridge ? bridgeFrame : concrete[1],
       );
-      rod(g, [-33, y + 1.25, z + dz], [27, y + 1.25, z + dz], 0.035, chrome);
-      for (let x = -33; x < 28; x += 2)
-        rod(g, [x, y + 0.5, z + dz], [x, y + 1.25, z + dz], 0.025, chrome);
+      rod(
+        g,
+        [-33, y + 1.25, z + dz],
+        [27, y + 1.25, z + dz],
+        0.035,
+        bridgeFrame,
+      );
+      for (let x = -33; x < 28; x += 2) {
+        rod(g, [x, y + 0.5, z + dz], [x, y + 1.25, z + dz], 0.025, bridgeFrame);
+        if (pedestrianBridge && x < 27)
+          box(
+            g,
+            "bridge-rail-panel",
+            [1.85, 0.78, 0.045],
+            [x + 0.96, y + 0.82, z + dz],
+            glass,
+          );
+      }
+    }
+    if (pedestrianBridge) {
+      for (let i = 0; i < 24; i++)
+        box(
+          g,
+          "footbridge-stair",
+          [3.2, 0.22, 0.52],
+          [-19, 0.3 + i * 0.32, z + 12 - i * 0.5],
+          concrete[2],
+        );
+      for (const x of [-20.55, -17.45])
+        rod(g, [x, 1.25, z + 12], [x, y + 1.25, z], 0.045, bridgeFrame);
     }
     if (z === -52) {
       for (const x of [-9, -4, 2, 8])
@@ -1053,7 +1289,7 @@ export function createCity(car) {
     }
     bake(g);
   }
-  for (const z of [-24, -89, -180, -270]) {
+  for (const z of [-89, -180, -270]) {
     for (const x of [-12, 9.5])
       rod(street, [x, 0.3, z], [x, 6.8, z], 0.07, steel);
     rod(street, [-12, 6.8, z], [9.5, 6.8, z], 0.04, steel);
@@ -1118,10 +1354,10 @@ export function createCity(car) {
   bake(storefront);
   storefront.position.x = 8;
   referenceArchitecture(root);
-  roundTower(root, -45, -80, 12, 87);
-  sign(root, "hero-0", 5.4, 7.2, -15.9, 12.8, -46, 0.25);
+  roundTower(root, -43, -82, 10, 12, 14);
+  sign(root, "hero-0", 5.4, 7.2, -17.4, 11, -46, 0.25);
   sign(root, "hero-1", 5.2, 7, -16.7, 14.2, -97, 0.3);
-  sign(root, "militech", 8, 2.6, -22, 11.6, -57, 0.3);
+  sign(root, "masala", 8, 2.6, -30, 11.6, -57, 0.3);
   const utilities = group(root, "fenced-utility-yard");
   for (let i = 0; i < 5; i++) {
     box(
@@ -1152,6 +1388,7 @@ export function createCity(car) {
   bake(utilities);
   const barriers = group(root, "construction-safety-barriers");
   const orange = material("cladding-safety-orange", 0xbb7442, 0.83, 0.2);
+  const barrierFace = material("reference-barrier-panel", 0xffffff, 0.86);
   for (let z = 3; z > -85; z -= 3.1) {
     box(
       barriers,
@@ -1185,13 +1422,14 @@ export function createCity(car) {
         [-13.31, y, z],
         orange,
       );
-    box(
+    const face = mesh(
       barriers,
-      "barrier-sign-recess",
-      [0.025, 0.27, 0.6],
-      [-13.28, 0.72, z],
-      dark,
+      "barrier-marked-face",
+      new T.PlaneGeometry(2.45, 0.64),
+      barrierFace,
+      [-13.285, 0.72, z],
     );
+    face.rotation.y = Math.PI / 2;
   }
   bake(barriers);
   const skyline = group(root, "distant-skyline");
@@ -1212,7 +1450,7 @@ export function createCity(car) {
   root.add(car);
   van(root, DRIVE_LANE_X - 5.4, -3.3, 0x929185, 0);
   van(root, -5.8, -25, 0x747c70, 1);
-  van(root, DRIVE_LANE_X - 3.1, -44, 0x526c5f, 2).scale.set(1.3, 1.5, 1.3);
+  constructionTruck(root, DRIVE_LANE_X - 3.1, -44);
   van(root, 1.4, -83, 0x707b77, 3);
   van(root, -5.3, -137, 0x9e9785, 4);
   const checkpoints = group(root, "checkpoints");

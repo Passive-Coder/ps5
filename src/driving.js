@@ -93,9 +93,9 @@ export class DrivingGame {
     });
     this.scene.fog = new T.Fog(0xe3ddcb, 48, 270);
     this.scene.environment = assets.environment.texture;
-    this.scene.environmentIntensity = 0.65;
+    this.scene.environmentIntensity = 0.5;
     this.scene.environmentRotation.y = -1.1;
-    this.scene.add(new T.HemisphereLight(0xc0d2d8, 0x776849, 1.35));
+    this.scene.add(new T.HemisphereLight(0xb9cedb, 0x776849, 0.95));
     this.sun = new T.DirectionalLight(0xffebc7, 5.8);
     this.sun.position.set(55, 70, -75);
     this.sun.castShadow = true;
@@ -112,9 +112,9 @@ export class DrivingGame {
     this.sun.shadow.radius = 2;
     this.sun.shadow.bias = -0.0003;
     this.scene.add(this.sun, this.sun.target);
-    this.bounce = new T.DirectionalLight(0xdce2d7, 0.65);
+    this.bounce = new T.DirectionalLight(0xdce2d7, 0.4);
     this.scene.add(this.bounce, this.bounce.target);
-    this.camera = new T.PerspectiveCamera(54, 16 / 9, 0.08, 650);
+    this.camera = new T.PerspectiveCamera(51, 16 / 9, 0.08, 650);
     this.target = new T.WebGLRenderTarget(1536, 864, {
       type: T.HalfFloatType,
       depthBuffer: true,
@@ -151,14 +151,19 @@ export class DrivingGame {
     decorateCity(root, assets);
     const logo = document.querySelector(".cyberpunk-wordmark");
     const logoContext = logo.getContext("2d");
-    logoContext.drawImage(assets.street, 10, 16, 146, 49, 0, 0, 584, 196);
+    logoContext.drawImage(assets.details, 0, 512, 768, 256, 0, 0, 584, 196);
     const logoPixels = logoContext.getImageData(0, 0, 584, 196);
     for (let k = 0; k < logoPixels.data.length; k += 4) {
       const [r, g, b] = logoPixels.data.subarray(k, k + 3);
       const yellow = Math.min(r, g) - b;
-      logoPixels.data[k + 3] *=
+      const goldMask =
         Math.max(0, Math.min(1, (yellow - 24) / 22)) *
-        Math.max(0, Math.min(1, (Math.min(r, g) - 85) / 35));
+        Math.max(0, Math.min(1, (Math.min(r, g) - 85) / 35)) *
+        Math.max(0, Math.min(1, (g - r * 0.85) / 15));
+      const blueMask =
+        Math.max(0, Math.min(1, (Math.min(g, b) - r - 20) / 30)) *
+        Math.max(0, Math.min(1, (Math.min(g, b) - 90) / 40));
+      logoPixels.data[k + 3] *= Math.max(goldMask, blueMask);
     }
     logoContext.putImageData(logoPixels, 0, 0);
     this.people = [];
@@ -226,8 +231,8 @@ export class DrivingGame {
         root: person,
         joints,
         phase: i * 1.3,
-        x: i === 0 ? 11.1 : 11.2 + (i % 3) * 1.1,
-        z: i === 0 ? 1 : -8 - i * 13,
+        x: i === 0 ? 10.8 : 11.2 + (i % 3) * 1.1,
+        z: i === 0 ? 0.5 : -8 - i * 13,
         direction: i === 0 || i % 4 === 3 ? -1 : 1,
       });
     }
@@ -257,9 +262,9 @@ export class DrivingGame {
     const paint = new T.MeshPhysicalMaterial({
       color: 0x147e8a,
       metalness: 0.46,
-      roughness: 0.19,
+      roughness: 0.23,
       clearcoat: 1,
-      clearcoatRoughness: 0.07,
+      clearcoatRoughness: 0.1,
       envMapIntensity: 1.5,
     });
     const pearl = new T.MeshPhysicalMaterial({
@@ -280,8 +285,15 @@ export class DrivingGame {
     this.car.traverse((o) => {
       if (!o.isMesh) return;
       if (o.material.name === "car-paint") o.material = paint;
-      else if (o.material.name === "car-pearl") o.material = pearl;
-      else if (o.material.name === "car-lower-paint") o.material = lower;
+      else if (o.material.name === "car-pearl") {
+        pearl.map = o.material.map;
+        o.material = pearl;
+      } else if (o.material.name === "car-rear-livery") {
+        const rear = paint.clone();
+        rear.color.set(0xffffff);
+        rear.map = o.material.map;
+        o.material = rear;
+      } else if (o.material.name === "car-lower-paint") o.material = lower;
     });
   }
   reset(aoi) {
@@ -315,7 +327,7 @@ export class DrivingGame {
     const distance = this.state.distance;
     this.camera.position.set(roadX(distance - 8.4) + 5.1, 2.65, 8.4 - distance);
     this.camera.lookAt(roadX(distance + 14) - 1.35, 2.12, -14 - distance);
-    this.sun.position.set(roadX(distance) + 46, 59, -68 - distance);
+    this.sun.position.set(roadX(distance) + 46, 36, -68 - distance);
     this.sun.target.position.set(roadX(distance), 0, -22 - distance);
     this.bounce.position.set(roadX(distance) - 12, 8, 12 - distance);
     this.bounce.target.position.set(roadX(distance), 1, -distance);

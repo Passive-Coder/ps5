@@ -60,11 +60,13 @@ export async function loadCityMaterials(renderer) {
       img.onerror = reject;
       img.src = src;
     });
-  [assets.facades, assets.street, assets.district] = await Promise.all([
-    loader.loadAsync("/assets/textures/district-facades.png"),
-    loadImage("/assets/street-reference.png"),
-    loadImage("/assets/district-reference.png"),
-  ]);
+  [assets.facades, assets.street, assets.district, assets.details] =
+    await Promise.all([
+      loader.loadAsync("/assets/textures/district-facades.png"),
+      loadImage("/assets/street-reference.png"),
+      loadImage("/assets/district-reference.png"),
+      loadImage("/assets/textures/street-details.webp"),
+    ]);
   assets.facades.colorSpace = T.SRGBColorSpace;
   assets.facades.anisotropy = Math.min(
     8,
@@ -101,23 +103,24 @@ function windowTexture(index) {
 }
 function poster(name, assets) {
   const art = assets.art;
-  // Only billboard artwork is sampled from the reference. The street, people
-  // and vehicles remain independently rendered geometry.
-  if (name.includes("kiosk"))
-    return canvasTexture(256, 400, (c, w, h) =>
-      c.drawImage(assets.street, 619, 226, 47, 63, 0, 0, w, h),
-    );
-  if (name.includes("right-poster"))
-    return canvasTexture(384, 640, (c, w, h) =>
-      c.drawImage(assets.street, 606, 1, 47, 78, 0, 0, w, h),
+  const details = name.includes("kiosk")
+    ? [384, 0, 256, 384]
+    : name.includes("right-poster")
+      ? [640, 0, 256, 512]
+      : name.includes("masala")
+        ? [768, 512, 384, 128]
+        : name.includes("nc-mark")
+          ? [1536, 0, 256, 384]
+          : name === "sign-hero-0"
+            ? [0, 0, 384, 512]
+            : null;
+  if (details)
+    return canvasTexture(details[2], details[3], (c, w, h) =>
+      c.drawImage(assets.details, ...details, 0, 0, w, h),
     );
   if (name.includes("militech"))
     return canvasTexture(512, 256, (c, w, h) =>
       c.drawImage(assets.street, 212, 132, 36, 19, 0, 0, w, h),
-    );
-  if (name === "sign-hero-0")
-    return canvasTexture(384, 512, (c, w, h) =>
-      c.drawImage(assets.street, 251, 116, 44, 65, 0, 0, w, h),
     );
   if (name === "sign-hero-1")
     return canvasTexture(384, 512, (c, w, h) =>
@@ -128,15 +131,7 @@ function poster(name, assets) {
     const id = Number(name.match(/\d+/)?.[0] || 0);
     c.fillStyle = "#162e35";
     c.fillRect(0, 0, w, h);
-    if (name.includes("kiosk")) {
-      c.fillStyle = "#d49c27";
-      c.fillRect(0, 0, w, h);
-      c.drawImage(art, 1020, 190, 475, 840, 70, 110, w - 140, h - 150);
-      c.fillStyle = "#242518";
-      c.font = "900 70px Arial";
-      c.textAlign = "center";
-      c.fillText("ALL FOODS", w / 2, 83);
-    } else if (name.includes("hotel")) {
+    if (name.includes("hotel")) {
       c.fillStyle = "#162e35";
       c.fillRect(0, 0, w, h);
       c.fillStyle = "#8fc0c3";
@@ -212,6 +207,122 @@ function poster(name, assets) {
 export function decorateCity(root, assets) {
   const seen = new Set(),
     windows = Array.from({ length: 4 }, (_, i) => windowTexture(i));
+  const detail = (x, y, w, h) =>
+    canvasTexture(w, h, (c, tw, th) =>
+      c.drawImage(assets.details, x, y, w, h, 0, 0, tw, th),
+    );
+  const plate = detail(1152, 512, 256, 128);
+  const pearlLivery = canvasTexture(1024, 256, (c, w, h) => {
+    c.fillStyle = "#f7f7ef";
+    c.fillRect(0, 0, w, h);
+    c.fillStyle = "#b69a50";
+    c.fillRect(w * 0.574, 0, w * 0.018, h);
+    c.fillStyle = "#e0cd8e";
+    c.fillRect(w * 0.574, 0, w * 0.002, h);
+  });
+  const rearLivery = canvasTexture(1024, 512, (c, w, h) => {
+    c.fillStyle = "#147e8a";
+    c.fillRect(0, 0, w, h);
+    for (const side of [-1, 1]) {
+      c.save();
+      if (side > 0) {
+        c.translate(w, 0);
+        c.scale(-1, 1);
+      }
+      c.fillStyle = "#b78c23";
+      c.beginPath();
+      for (const [i, [x, y]] of [
+        [0.015, 0.64],
+        [0.3, 0.64],
+        [0.37, 0.48],
+        [0.015, 0.21],
+      ].entries())
+        i ? c.lineTo(x * w, y * h) : c.moveTo(x * w, y * h);
+      c.closePath();
+      c.fill();
+      c.fillStyle = "#093c48";
+      c.beginPath();
+      for (const [i, [x, y]] of [
+        [0.025, 0.24],
+        [0.36, 0.43],
+        [0.32, 0.51],
+        [0.025, 0.46],
+      ].entries())
+        i ? c.lineTo(x * w, y * h) : c.moveTo(x * w, y * h);
+      c.closePath();
+      c.fill();
+      c.restore();
+    }
+  });
+  const engineDeck = canvasTexture(512, 1024, (c, w, h) => {
+    c.fillStyle = "#0b171b";
+    c.fillRect(0, 0, w, h);
+    for (const side of [-1, 1]) {
+      c.save();
+      c.translate(w * 0.5, h * 0.55);
+      c.scale(side, 1);
+      const g = c.createLinearGradient(0, 0, w * 0.3, 0);
+      g.addColorStop(0, "#271d15");
+      g.addColorStop(0.6, "#885a32");
+      g.addColorStop(1, "#49301d");
+      c.fillStyle = g;
+      c.beginPath();
+      c.moveTo(w * 0.08, -h * 0.18);
+      c.lineTo(w * 0.32, -h * 0.27);
+      c.lineTo(w * 0.27, h * 0.2);
+      c.lineTo(w * 0.08, h * 0.25);
+      c.closePath();
+      c.fill();
+      c.strokeStyle = "#171c1c";
+      c.lineWidth = 5;
+      for (let y = -h * 0.16; y < h * 0.17; y += h * 0.07) {
+        c.beginPath();
+        c.moveTo(w * 0.08, y);
+        c.lineTo(w * 0.3, y - h * 0.04);
+        c.stroke();
+      }
+      c.restore();
+    }
+    c.fillStyle = "#b7c5c2";
+    c.fillRect(w * 0.49, h * 0.08, w * 0.014, h * 0.78);
+    c.fillStyle = "#d23933";
+    c.fillRect(w * 0.505, h * 0.08, w * 0.009, h * 0.78);
+  });
+  const tailLeds = canvasTexture(1024, 128, (c, w, h) => {
+    c.fillStyle = "#000";
+    c.fillRect(0, 0, w, h);
+    for (const side of [-1, 1]) {
+      c.save();
+      if (side > 0) {
+        c.translate(w, 0);
+        c.scale(-1, 1);
+      }
+      c.strokeStyle = "#ff2436";
+      c.lineWidth = 9;
+      c.lineJoin = "round";
+      c.shadowColor = "#ff1430";
+      c.shadowBlur = 11;
+      c.beginPath();
+      c.moveTo(w * 0.045, h * 0.22);
+      c.lineTo(w * 0.105, h * 0.12);
+      c.lineTo(w * 0.31, h * 0.4);
+      c.lineTo(w * 0.35, h * 0.6);
+      c.lineTo(w * 0.18, h * 0.57);
+      c.closePath();
+      c.stroke();
+      c.shadowBlur = 0;
+      c.strokeStyle = "#ff9b9c";
+      c.lineWidth = 3;
+      c.stroke();
+      c.strokeStyle = "#ff3151";
+      c.lineWidth = 6;
+      c.beginPath();
+      c.moveTo(w * 0.12, h * 0.39);
+      c.lineTo(w * 0.3, h * 0.51);
+      c.stroke();
+      c.restore();
+    }
+  });
   const metalWear = canvasTexture(256, 256, (c, w, h) => {
     let seed = 8713;
     const random = () => {
@@ -240,7 +351,7 @@ export function decorateCity(root, assets) {
       seen.add(m);
       if (m.name === "asphalt" || m.name === "asphalt-patch") {
         Object.assign(m, assets.asphalt_02);
-        m.color.set(m.name === "asphalt" ? 0xb8b3a2 : 0x888b80);
+        m.color.set(m.name === "asphalt" ? 0xa19e90 : 0x888b80);
         m.roughness = 0.84;
         m.normalScale = new T.Vector2(0.19, 0.19);
         for (const texture of [m.map, m.normalMap, m.roughnessMap])
@@ -256,11 +367,11 @@ export function decorateCity(root, assets) {
         m.map = canvasTexture(1024, 1024, (c, w, h) => {
           c.fillStyle = "#e3dfd0";
           c.fillRect(0, 0, w, h);
-          c.globalAlpha = 0.38;
+          c.globalAlpha = 0.7;
           c.drawImage(source, 0, 0, w, h);
         });
         m.map.wrapS = m.map.wrapT = T.RepeatWrapping;
-        m.color.set(0xe1dac6);
+        m.color.set(0xc9c8bb);
         m.roughness = 0.86;
         m.normalScale = new T.Vector2(0.07, 0.07);
       } else if (m.name.startsWith("reference-facade-")) {
@@ -287,13 +398,6 @@ export function decorateCity(root, assets) {
         m.color.set(index === 0 ? 0xa9b8b1 : 0xffffff);
         m.roughness = 0.78;
         m.metalness = 0.12;
-      } else if (m.name === "cladding-megastructure-panel") {
-        m.map = canvasTexture(512, 512, (c, w, h) =>
-          c.drawImage(assets.street, 32, 72, 88, 70, 0, 0, w, h),
-        );
-        m.map.wrapS = m.map.wrapT = T.RepeatWrapping;
-        m.color.set(0xb4bdb7);
-        m.roughness = 0.72;
       } else if (m.name.startsWith("cladding") || m.name === "painted-steel") {
         m.map = metalWear;
         m.roughness = 0.65;
@@ -307,7 +411,37 @@ export function decorateCity(root, assets) {
         m.map = windows[1];
         m.color.set(0x4f777c);
         m.roughness = 0.22;
-      } else if (m.name === "tail-light" || m.name === "car-taillight") {
+      } else if (m.name === "reference-window-bay") {
+        m.map = detail(896, 0, 384, 384);
+        m.color.set(0xc4c8b8);
+        m.roughness = 0.37;
+        m.metalness = 0.26;
+      } else if (m.name === "reference-tower-louvres") {
+        m.map = detail(1280, 0, 256, 512);
+        m.color.set(0xa1ada6);
+        m.roughness = 0.65;
+        m.metalness = 0.3;
+      } else if (m.name === "reference-barrier-panel") {
+        m.map = detail(1408, 512, 512, 256);
+        m.color.set(0xe5dfcb);
+        m.roughness = 0.86;
+      } else if (m.name === "car-numberplate") {
+        m.map = plate;
+        m.color.set(0xffffff);
+      } else if (m.name === "car-pearl") {
+        m.map = pearlLivery;
+      } else if (m.name === "car-rear-livery") {
+        m.map = rearLivery;
+      } else if (m.name === "car-engine-deck") {
+        m.map = engineDeck;
+      } else if (m.name === "car-taillight") {
+        m.color.set(0x182025);
+        m.emissive = new T.Color(0xffffff);
+        m.emissiveMap = tailLeds;
+        m.emissiveIntensity = 2.5;
+        m.metalness = 0.15;
+        m.roughness = 0.17;
+      } else if (m.name === "tail-light") {
         m.emissive = new T.Color(0xdf1731);
         m.emissiveIntensity = 1.4;
       } else if (m.name === "road-paint") {
